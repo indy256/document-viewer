@@ -1,6 +1,7 @@
 #include "window.h"
 #include <QStandardPaths>
 #include <QLockFile>
+#include <QIcon>
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -11,6 +12,7 @@
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setApplicationName("Document Viewer");
+    app.setWindowIcon(QIcon(":/icons/DocumentViewer.png"));
     if (app.arguments().contains("--smoke-test")) {
         FPDF_InitLibrary();
         { Window window; app.processEvents(); }

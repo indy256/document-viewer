@@ -20,6 +20,21 @@ target_link_libraries(viewer_core PRIVATE Qt6::CorePrivate)
 target_include_directories(viewer_core PUBLIC src)
 qt_add_executable(DocumentViewer WIN32 MACOSX_BUNDLE src/main.cpp)
 set_target_properties(DocumentViewer PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER "org.documentviewer.app")
+qt_add_resources(DocumentViewer app_icon
+    PREFIX "/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons"
+    FILES resources/icons/DocumentViewer.png)
+if(WIN32)
+    enable_language(RC)
+    set(APP_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/DocumentViewer.ico")
+    configure_file(resources/app-icon.rc.in app-icon.rc @ONLY)
+    set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/app-icon.rc" PROPERTIES OBJECT_DEPENDS "${APP_ICON}")
+    target_sources(DocumentViewer PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app-icon.rc")
+elseif(APPLE)
+    set_source_files_properties(resources/icons/DocumentViewer.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    target_sources(DocumentViewer PRIVATE resources/icons/DocumentViewer.icns)
+    set_target_properties(DocumentViewer PROPERTIES MACOSX_BUNDLE_ICON_FILE DocumentViewer.icns)
+endif()
 target_link_libraries(DocumentViewer PRIVATE viewer_core)
 copy_pdfium_runtime(DocumentViewer)
 

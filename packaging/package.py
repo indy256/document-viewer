@@ -46,8 +46,11 @@ if args.platform == "windows":
 elif args.platform == "linux":
     if args.appimagetool is None:
         raise SystemExit("--appimagetool is required on Linux")
-    for name in ("AppRun", "DocumentViewer.desktop", "DocumentViewer.svg"):
+    for name in ("AppRun", "DocumentViewer.desktop"):
         shutil.copy2(root / name, stage / name)
+    shutil.copy2(root.parent / "resources/icons/DocumentViewer.png", stage / "DocumentViewer.png")
+    # Remove the previous packaging icon when reusing an install tree.
+    (stage / "DocumentViewer.svg").unlink(missing_ok=True)
     (stage / "AppRun").chmod(0o755)
     run(args.appimagetool.resolve(), "--appimage-extract-and-run", stage, output,
         env={**os.environ, "ARCH": "x86_64", "VERSION": "1.0"})
