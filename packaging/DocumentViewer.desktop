@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Document Viewer
+Exec=DocumentViewer %F
+Icon=DocumentViewer
+Categories=Office;Viewer;
+MimeType=application/pdf;application/epub+zip;
+Terminal=false

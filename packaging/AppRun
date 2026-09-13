@@ -1,0 +1,3 @@
+#!/bin/sh
+appdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$appdir/bin/DocumentViewer" "$@"

@@ -1,0 +1,121 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            qt-host: windows
+            qt-arch: win64_msvc2022_64
+            msvc-arch: x64
+            package-platform: windows
+            extension: exe
+          - runner: windows-11-arm
+            qt-host: windows_arm64
+            qt-arch: win64_msvc2022_arm64
+            msvc-arch: arm64
+            package-platform: windows
+            extension: exe
+          - runner: ubuntu-latest
+            qt-host: linux
+            qt-arch: linux_gcc_64
+            package-platform: linux
+            extension: AppImage
+          - runner: macos-latest
+            qt-host: mac
+            qt-arch: clang_64
+            package-platform: macos
+            extension: dmg
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc-arch }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build patchelf fonts-dejavu-core libgl1-mesa-dev libegl1 libopengl0 libxcb-cursor0 libxkbcommon-x11-0 xvfb
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        with:
+          version: '6.11.2'
+          host: ${{ matrix.qt-host }}
+          arch: ${{ matrix.qt-arch }}
+          cache: true
+          cache-key-prefix: qt-6.11.2-${{ matrix.runner }}
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/stage -DCMAKE_INSTALL_LIBDIR=lib
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 120
+
+      - name: Deploy application and dependencies
+        run: cmake --install build
+
+      - name: Install AppImage packaging tool
+        if: runner.os == 'Linux'
+        run: |
+          curl -fL https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage -o build/appimagetool
+          echo 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  build/appimagetool' | sha256sum -c -
+          chmod +x build/appimagetool
+
+      - name: Create single-file distribution
+        run: python packaging/package.py --platform ${{ matrix.package-platform }} --stage stage --output dist/DocumentViewer-${{ matrix.runner }}.${{ matrix.extension }} --appimagetool build/appimagetool
+
+      - name: Test portable Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath "dist/DocumentViewer-${{ matrix.runner }}.exe" -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
+          if (-not $app.WaitForExit(120000)) { Stop-Process -Id $app.Id; throw 'Portable launch timed out' }
+          if ($app.ExitCode -ne 0) { throw "Portable launch failed: $($app.ExitCode)" }
+
+      - name: Test Linux AppImage
+        if: runner.os == 'Linux'
+        run: xvfb-run -a dist/DocumentViewer-${{ matrix.runner }}.AppImage --appimage-extract-and-run --smoke-test
+
+      - name: Test macOS application bundle
+        if: runner.os == 'macOS'
+        run: stage/DocumentViewer.app/Contents/MacOS/DocumentViewer --smoke-test
+
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: DocumentViewer-${{ matrix.runner }}
+          path: dist/DocumentViewer-${{ matrix.runner }}.${{ matrix.extension }}
+          if-no-files-found: error
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.runner }}
+          path: build/Testing/Temporary/
+          if-no-files-found: ignore

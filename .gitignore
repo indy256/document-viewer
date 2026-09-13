@@ -1,0 +1,10 @@
+/build/
+/third_party/
+/stage/
+/dist/
+/DocumentViewer-*.tar.gz
+/CMakeUserPresets.json
+*.user
+/*.pdf
+/*.epub
+__pycache__/
