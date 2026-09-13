@@ -156,6 +156,11 @@ to a font file to override the platform default. On an already deployed Windows
 build, use the test preset or set `QT_QPA_PLATFORM_PLUGIN_PATH` to the Qt kit's
 `plugins/platforms` directory so the offscreen plugin can be found.
 
+Link-time optimization (LTO/IPO) is enabled by default for Release, RelWithDebInfo,
+and MinSizeRel builds, including the Windows portable launcher. CMake checks
+compiler/linker support at configure time; use `-DDOCUMENT_VIEWER_ENABLE_LTO=OFF`
+to disable it. Prebuilt Qt and PDFium libraries are not rebuilt with LTO.
+
 ## Single-file distribution
 
 Run `package.cmd` on this machine to build, test, deploy, and generate
