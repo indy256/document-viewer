@@ -230,3 +230,29 @@ the UI without loading or changing the reading session.
 `packaging/package.py` packages an existing CMake install tree. On Windows it builds
 a small native launcher with a statically linked compiler runtime. Linux packaging
 uses checksum-verified appimagetool 1.9.1; macOS uses the built-in `hdiutil` tool.
+
+## Releases
+
+Push a version tag to build, test, and publish a GitHub Release:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The release job runs only for `v*` tags, after all four platform builds and tests
+succeed. Branch builds and pull requests do not publish releases. You can also
+dispatch the workflow for an existing version tag with
+`gh workflow run build.yml --ref v1.0.0`.
+Tags containing a hyphen, such as `v1.1.0-rc.1`, produce prereleases.
+
+Release assets are direct downloads: `dv-windows-x64.exe`,
+`dv-windows-arm64.exe`, `dv-macos-arm64.dmg`, and `dv-linux-x64.AppImage`.
+For Linux, either run `chmod +x dv-linux-x64.AppImage` after downloading, or use
+the additional uncompressed `dv-linux-x64.AppImage.tar` download and extract it
+to retain executable permissions. No ZIP wrapper is added to release downloads.
+
+Release notes are generated automatically. All assets are uploaded to a draft
+before publication. Existing releases are never overwritten; if an upload fails,
+delete the incomplete draft before rerunning the failed release job. Published
+versions should use new tags for subsequent changes.
