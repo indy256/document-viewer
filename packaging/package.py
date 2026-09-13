@@ -50,6 +50,7 @@ elif args.platform == "linux":
     (stage / "AppRun").chmod(0o755)
     run(args.appimagetool.resolve(), "--appimage-extract-and-run", stage, output,
         env={**os.environ, "ARCH": "x86_64", "VERSION": "1.0"})
+    output.chmod(0o755)
 else:
     if not (stage / "DocumentViewer.app").is_dir():
         raise SystemExit("The deployed macOS application bundle is missing.")

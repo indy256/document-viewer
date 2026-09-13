@@ -5,6 +5,6 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 $cmake = 'C:\Qt\Tools\CMake_64\bin\cmake.exe'
 & $cmake --install build --prefix stage
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-py packaging/package.py --platform windows --stage stage --output dist/DocumentViewer.exe --cmake $cmake --cxx C:/Qt/Tools/mingw1310_64/bin/g++.exe --ninja C:/Qt/Tools/Ninja/ninja.exe
+py packaging/package.py --platform windows --stage stage --output dist/dv-windows-x64.exe --cmake $cmake --cxx C:/Qt/Tools/mingw1310_64/bin/g++.exe --ninja C:/Qt/Tools/Ninja/ninja.exe
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-Write-Host 'Portable app: dist\DocumentViewer.exe'
+Write-Host 'Portable app: dist\dv-windows-x64.exe'

@@ -135,9 +135,20 @@ Each job installs Qt 6.11.2 with matching private headers, configures CMake/Ninj
 builds, runs the offscreen Qt tests, and deploys the application with its Qt and
 PDFium dependencies. Platform-specific PDFium archives are pinned by SHA-256.
 Failed jobs upload test logs. Successful jobs upload a
-single-file artifact: a portable `.exe` on Windows, `.AppImage` on Linux, and
-`.dmg` on macOS. Windows and Linux files launch directly (make the AppImage
-executable first); open the macOS disk image and launch or copy `DocumentViewer.app`.
+platform artifact:
+
+| Artifact | Contents |
+| --- | --- |
+| `dv-windows-x64.exe` | `dv-windows-x64.exe` |
+| `dv-windows-arm64.exe` | `dv-windows-arm64.exe` |
+| `dv-linux-x64.AppImage` | `dv-linux-x64.AppImage.tar` containing the executable AppImage |
+| `dv-macos-arm64` | `dv-macos-arm64.dmg` |
+
+GitHub wraps workflow artifacts in ZIP files. After unzipping the Linux download,
+run `tar -xf dv-linux-x64.AppImage.tar`; the AppImage retains executable permissions
+and can be launched directly. The tar wrapper avoids GitHub's artifact permission
+loss. Windows files launch directly; open the macOS disk image and launch or copy
+`DocumentViewer.app`.
 The macOS app is not Developer ID signed or notarized.
 Linux artifacts target the runner's distribution/runtime generation.
 
@@ -170,7 +181,7 @@ Qt/PDFium dependencies, which retain their upstream compilation settings.
 ## Single-file distribution
 
 Run `package.cmd` on this machine to build, test, deploy, and generate
-`dist/DocumentViewer.exe`. This is the file to copy to another Windows x64 machine;
+`dist/dv-windows-x64.exe`. This is the file to copy to another Windows x64 machine;
 it embeds the application, Qt plugins, PDFium, compiler runtime, and notices.
 The portable launcher uses Windows' built-in `tar.exe` (Windows 10 1803+ / Windows
 11) to unpack into a unique temporary directory, forwards command-line arguments,

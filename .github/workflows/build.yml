@@ -26,25 +26,29 @@ jobs:
             qt-arch: win64_msvc2022_64
             msvc-arch: x64
             package-platform: windows
-            extension: exe
+            artifact-name: dv-windows-x64.exe
+            package-name: dv-windows-x64.exe
             aqt-extra: --external 7z
           - runner: windows-11-arm
             qt-host: windows_arm64
             qt-arch: win64_msvc2022_arm64
             msvc-arch: arm64
             package-platform: windows
-            extension: exe
+            artifact-name: dv-windows-arm64.exe
+            package-name: dv-windows-arm64.exe
             aqt-extra: --external 7z
           - runner: ubuntu-latest
             qt-host: linux
             qt-arch: linux_gcc_64
             package-platform: linux
-            extension: AppImage
+            artifact-name: dv-linux-x64.AppImage
+            package-name: dv-linux-x64.AppImage
           - runner: macos-latest
             qt-host: mac
             qt-arch: clang_64
             package-platform: macos
-            extension: dmg
+            artifact-name: dv-macos-arm64
+            package-name: dv-macos-arm64.dmg
     steps:
       - uses: actions/checkout@v4
 
@@ -110,29 +114,38 @@ jobs:
           chmod +x build/appimagetool
 
       - name: Create single-file distribution
-        run: python packaging/package.py --platform ${{ matrix.package-platform }} --stage stage --output dist/DocumentViewer-${{ matrix.runner }}.${{ matrix.extension }} --appimagetool build/appimagetool
+        run: python packaging/package.py --platform ${{ matrix.package-platform }} --stage stage --output dist/${{ matrix.package-name }} --appimagetool build/appimagetool
 
       - name: Test portable Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $app = Start-Process -FilePath "dist/DocumentViewer-${{ matrix.runner }}.exe" -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
+          $app = Start-Process -FilePath "dist/${{ matrix.package-name }}" -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
           if (-not $app.WaitForExit(120000)) { Stop-Process -Id $app.Id; throw 'Portable launch timed out' }
           if ($app.ExitCode -ne 0) { throw "Portable launch failed: $($app.ExitCode)" }
 
       - name: Test Linux AppImage
         if: runner.os == 'Linux'
-        run: xvfb-run -a dist/DocumentViewer-${{ matrix.runner }}.AppImage --appimage-extract-and-run --smoke-test
+        run: xvfb-run -a dist/${{ matrix.package-name }} --appimage-extract-and-run --smoke-test
 
       - name: Test macOS application bundle
         if: runner.os == 'macOS'
         run: stage/DocumentViewer.app/Contents/MacOS/DocumentViewer --smoke-test
 
+      - name: Preserve Linux executable permissions
+        if: runner.os == 'Linux'
+        run: |
+          test -x dist/${{ matrix.package-name }}
+          tar -cf dist/${{ matrix.package-name }}.tar -C dist ${{ matrix.package-name }}
+          mkdir -p build/artifact-check
+          tar -xf dist/${{ matrix.package-name }}.tar -C build/artifact-check
+          test -x build/artifact-check/${{ matrix.package-name }}
+
       - name: Upload application
         uses: actions/upload-artifact@v4
         with:
-          name: DocumentViewer-${{ matrix.runner }}
-          path: dist/DocumentViewer-${{ matrix.runner }}.${{ matrix.extension }}
+          name: ${{ matrix.artifact-name }}
+          path: dist/${{ matrix.package-name }}${{ runner.os == 'Linux' && '.tar' || '' }}
           if-no-files-found: error
 
       - name: Upload test logs
