@@ -1,0 +1,5 @@
+# Official hosted runner label newer than actionlint's bundled label list.
+# https://github.com/actions/runner-images/issues/14602
+self-hosted-runner:
+  labels:
+    - windows-11-vs2026-arm
