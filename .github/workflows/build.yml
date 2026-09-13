@@ -163,6 +163,7 @@ jobs:
         with:
           name: ${{ matrix.artifact-name }}
           path: dist/${{ matrix.package-name }}${{ runner.os == 'Linux' && '.tar' || '' }}
+          compression-level: 0
           if-no-files-found: error
 
       - name: Upload test logs
@@ -171,4 +172,5 @@ jobs:
         with:
           name: test-logs-${{ matrix.runner }}
           path: build/Testing/Temporary/
+          compression-level: 0
           if-no-files-found: ignore
