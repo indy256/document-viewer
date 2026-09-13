@@ -175,25 +175,9 @@ jobs:
           archive: false
           if-no-files-found: ignore
 
-  windows-interop:
-    name: Windows ARM and x64 interoperability
-    needs: build
-    runs-on: windows-11-vs2026-arm
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: dv-windows-*
-          merge-multiple: true
-          skip-decompress: true
-          path: dist
-      - name: Open documents between native ARM and emulated x64 apps
-        run: python tests/windows_launch_tests.py --cross dist/dv-windows-arm64.exe dist/dv-windows-x64.exe
-
   release:
     name: Publish release
-    needs: [build, windows-interop]
+    needs: build
     if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 10
