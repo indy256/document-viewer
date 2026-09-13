@@ -39,9 +39,22 @@ FetchContent_Declare(pdfium
     URL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8044/pdfium-${pdfium_platform}-${pdfium_arch}.tgz"
     URL_HASH "SHA256=${pdfium_hash_${pdfium_arch}}")
 FetchContent_MakeAvailable(pdfium)
+set(pdfium_runtime_path "${pdfium_SOURCE_DIR}/${pdfium_library}")
+if(APPLE)
+    # Upstream's install ID is ./libpdfium.dylib, which dyld resolves against
+    # the working directory. Normalize a build-local copy before linking.
+    set(pdfium_runtime_path "${CMAKE_BINARY_DIR}/pdfium-runtime/libpdfium.dylib")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/pdfium-runtime")
+    configure_file("${pdfium_SOURCE_DIR}/${pdfium_library}" "${pdfium_runtime_path}" COPYONLY)
+    execute_process(COMMAND install_name_tool -id "@rpath/libpdfium.dylib" "${pdfium_runtime_path}"
+        COMMAND_ERROR_IS_FATAL ANY)
+    execute_process(COMMAND codesign --force --sign - "${pdfium_runtime_path}"
+        COMMAND_ERROR_IS_FATAL ANY)
+    list(APPEND CMAKE_BUILD_RPATH "${CMAKE_BINARY_DIR}/pdfium-runtime")
+endif()
 add_library(pdfium_runtime SHARED IMPORTED)
 set_target_properties(pdfium_runtime PROPERTIES
-    IMPORTED_LOCATION "${pdfium_SOURCE_DIR}/${pdfium_library}"
+    IMPORTED_LOCATION "${pdfium_runtime_path}"
     INTERFACE_INCLUDE_DIRECTORIES "${pdfium_SOURCE_DIR}/include")
 if(WIN32)
     set_target_properties(pdfium_runtime PROPERTIES IMPORTED_IMPLIB "${pdfium_SOURCE_DIR}/lib/pdfium.dll.lib")
