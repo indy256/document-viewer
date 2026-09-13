@@ -140,6 +140,10 @@ jobs:
         shell: pwsh
         run: ./scripts/test-portable.ps1 -Executable "dist/${{ matrix.package-name }}"
 
+      - name: Test repeated Windows application launches
+        if: runner.os == 'Windows'
+        run: python tests/windows_launch_tests.py stage/bin/DocumentViewer.exe dist/${{ matrix.package-name }}
+
       - name: Test Linux AppImage
         if: runner.os == 'Linux'
         run: xvfb-run -a dist/${{ matrix.package-name }} --appimage-extract-and-run --smoke-test
