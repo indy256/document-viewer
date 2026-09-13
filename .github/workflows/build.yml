@@ -22,7 +22,7 @@ jobs:
       matrix:
         include:
           - runner: windows-latest
-            vs-version: '17'
+            vs-version: '18'
             msvc-arch: x64
             package-platform: windows
             artifact-name: dv-windows-x64.exe

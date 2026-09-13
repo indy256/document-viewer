@@ -149,7 +149,7 @@ substring search, zoom/session recovery, and missing-chapter error recovery.
 
 | Runner | Toolchain / architecture |
 | --- | --- |
-| `windows-latest` | MSVC 2022, x64 |
+| `windows-latest` | MSVC 2026, x64 |
 | `windows-11-vs2026-arm` | MSVC 2026, ARM64 |
 | `ubuntu-latest` | GCC, x64 |
 | `macos-latest` | Apple Clang, ARM64 |
