@@ -48,6 +48,28 @@ open `CMakeLists.txt` and select the installed Qt 6.11.2 MinGW 64-bit kit.
 The `.cmd` launcher permits the build script for that process only, so it also
 works with this machine's default PowerShell script policy.
 
+To compile Qt itself with the installed MSVC x64 toolchain and LTO, then build and
+package the viewer against it:
+
+```powershell
+.\build-qt-msvc.cmd
+.\build-msvc.cmd -Package
+```
+
+The Qt build script fetches pinned Qt 6.11.2 Base and SVG sources into `C:\Qt\src`,
+builds under `C:\Qt\build`, and installs to `C:\Qt\6.11.2\msvc_lto_64`.
+It uses shared release libraries with `-ltcg -optimize-size`; Qt examples and
+Qt's own test suite are excluded. Visual Studio's C++ workload, Python 3, Git,
+and the local CMake/Ninja tools are required. Both scripts accept `-Jobs` (default 8).
+The MSVC viewer uses `build/msvc`, and its portable launcher uses
+`build/portable-msvc`, keeping compiler caches separate from MinGW.
+`build-msvc.cmd -Test` builds and tests; `-Package` also tests, deploys, and creates
+`dist/dv-windows-x64.exe`, then smoke-tests that portable executable.
+The package includes the MSVC runtime DLLs beside the application, without
+requiring users to run a separate redistributable installer.
+The `local-msvc-lto` preset can also be used from an MSVC developer shell.
+GitHub Actions continues to use the prebuilt Qt kits; the source build is local.
+
 ## Controls
 
 | Action | Control |
@@ -170,13 +192,15 @@ build, use the test preset or set `QT_QPA_PLATFORM_PLUGIN_PATH` to the Qt kit's
 Link-time optimization (LTO/IPO) is enabled by default for Release, RelWithDebInfo,
 and MinSizeRel builds, including the Windows portable launcher. CMake checks
 compiler/linker support at configure time; use `-DDOCUMENT_VIEWER_ENABLE_LTO=OFF`
-to disable it. Prebuilt Qt and PDFium libraries are not rebuilt with LTO.
+to disable it. Prebuilt Qt and PDFium libraries are not rebuilt with LTO; the
+optional `build-qt-msvc.cmd` path above compiles Qt itself with LTO.
 
 Local presets, CI, and the portable launcher use `MinSizeRel` to optimize for size
 (`-Os` with GCC/Clang, `/O1` with MSVC) while retaining LTO. GNU-linked size builds
 strip symbols; Apple and MSVC size builds remove unused code. Windows payloads use
 maximum ZIP compression. Most of the portable file still consists of the prebuilt
-Qt/PDFium dependencies, which retain their upstream compilation settings.
+Qt/PDFium dependencies. Prebuilt dependencies retain their upstream compilation
+settings; the optional local MSVC Qt build enables size optimization and LTO.
 
 ## Single-file distribution
 

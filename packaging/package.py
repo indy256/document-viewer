@@ -13,6 +13,7 @@ parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--cmake", default="cmake")
 parser.add_argument("--cxx")
 parser.add_argument("--ninja")
+parser.add_argument("--build-dir", type=Path, help="Separate launcher build directory for another compiler")
 parser.add_argument("--appimagetool", type=Path)
 args = parser.parse_args()
 root = Path(__file__).resolve().parent
@@ -26,7 +27,7 @@ def run(*command, **kwargs):
 if args.platform == "windows":
     if not (stage / "bin/DocumentViewer.exe").is_file():
         raise SystemExit("Deploy the application with cmake --install before packaging.")
-    build = root.parent / "build/portable"
+    build = args.build_dir.resolve() if args.build_dir else root.parent / "build/portable"
     build.mkdir(parents=True, exist_ok=True)
     payload = build / "payload.zip"
     with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:

@@ -1,23 +1,67 @@
 {
   "version": 6,
-  "configurePresets": [{
-    "name": "local-qt",
-    "displayName": "Local Qt 6.11.2 / MinGW",
-    "generator": "Ninja",
-    "binaryDir": "${sourceDir}/build",
-    "cacheVariables": {
-      "CMAKE_BUILD_TYPE": "MinSizeRel",
-      "CMAKE_PREFIX_PATH": "C:/Qt/6.11.2/mingw_64",
-      "CMAKE_CXX_COMPILER": "C:/Qt/Tools/mingw1310_64/bin/g++.exe",
-      "CMAKE_MAKE_PROGRAM": "C:/Qt/Tools/Ninja/ninja.exe"
+  "configurePresets": [
+    {
+      "name": "local-qt",
+      "displayName": "Local Qt 6.11.2 / MinGW",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "MinSizeRel",
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.11.2/mingw_64",
+        "CMAKE_CXX_COMPILER": "C:/Qt/Tools/mingw1310_64/bin/g++.exe",
+        "CMAKE_MAKE_PROGRAM": "C:/Qt/Tools/Ninja/ninja.exe"
+      },
+      "environment": {
+        "PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.11.2/mingw_64/bin;$penv{PATH}"
+      }
     },
-    "environment": {"PATH": "C:/Qt/Tools/mingw1310_64/bin;C:/Qt/6.11.2/mingw_64/bin;$penv{PATH}"}
-  }],
-  "buildPresets": [{"name": "local-qt", "configurePreset": "local-qt"}],
-  "testPresets": [{
-    "name": "local-qt",
-    "configurePreset": "local-qt",
-    "environment": {"QT_QPA_PLATFORM_PLUGIN_PATH": "C:/Qt/6.11.2/mingw_64/plugins/platforms"},
-    "output": {"outputOnFailure": true}
-  }]
+    {
+      "name": "local-msvc-lto",
+      "displayName": "Locally compiled Qt 6.11.2 / MSVC / LTO",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/msvc",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "MinSizeRel",
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.11.2/msvc_lto_64",
+        "CMAKE_CXX_COMPILER": "cl",
+        "CMAKE_MAKE_PROGRAM": "C:/Qt/Tools/Ninja/ninja.exe"
+      },
+      "environment": {
+        "PATH": "C:/Qt/6.11.2/msvc_lto_64/bin;$penv{PATH}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "local-qt",
+      "configurePreset": "local-qt"
+    },
+    {
+      "name": "local-msvc-lto",
+      "configurePreset": "local-msvc-lto"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "local-qt",
+      "configurePreset": "local-qt",
+      "environment": {
+        "QT_QPA_PLATFORM_PLUGIN_PATH": "C:/Qt/6.11.2/mingw_64/plugins/platforms"
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "local-msvc-lto",
+      "configurePreset": "local-msvc-lto",
+      "environment": {
+        "QT_QPA_PLATFORM_PLUGIN_PATH": "C:/Qt/6.11.2/msvc_lto_64/plugins/platforms"
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
 }
