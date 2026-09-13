@@ -22,6 +22,10 @@ copy_pdfium_runtime(DocumentViewer)
 install(TARGETS DocumentViewer BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(WIN32)
     install(FILES "$<TARGET_FILE:pdfium_runtime>" DESTINATION ${CMAKE_INSTALL_BINDIR})
+elseif(APPLE)
+    # The installed executable has only bundle-relative rpaths. Stage PDFium
+    # before macdeployqt scans dependencies so it can resolve that path.
+    install(FILES "$<TARGET_FILE:pdfium_runtime>" DESTINATION DocumentViewer.app/Contents/Frameworks)
 elseif(NOT APPLE)
     install(FILES "$<TARGET_FILE:pdfium_runtime>" DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
