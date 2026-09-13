@@ -13,17 +13,7 @@ if ($Test -or $Package) { Invoke-Checked ctest --preset local-msvc-lto }
 Invoke-Checked "$qt/bin/windeployqt.exe" --release --no-translations --no-system-d3d-compiler --no-opengl-sw build/msvc/DocumentViewer.exe
 if ($Package) {
     Invoke-Checked cmake --install build/msvc --prefix stage/msvc
-    # windeployqt otherwise ships a redistributable installer that the portable
-    # launcher never executes. Deploy this toolchain's runtime DLLs app-locally.
-    $crtDirectories = @(Get-ChildItem "$env:VCToolsRedistDir/x64/Microsoft.VC*.CRT" -Directory)
-    if ($crtDirectories.Count -ne 1) { throw 'Cannot locate the MSVC x64 runtime DLL directory.' }
-    $crt = $crtDirectories[0].FullName
-    foreach ($required in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
-        if (-not (Test-Path "$crt/$required")) { throw "Missing compiler runtime: $required" }
-    }
-    Get-ChildItem -LiteralPath $crt -Filter '*.dll' | Copy-Item -Destination stage/msvc/bin -Force
-    $installer = Join-Path $PSScriptRoot 'stage/msvc/bin/vc_redist.x64.exe'
-    if (Test-Path -LiteralPath $installer) { Remove-Item -LiteralPath $installer }
+    & "$PSScriptRoot/scripts/deploy-msvc-runtime.ps1" -Stage stage/msvc -Architecture x64
     Invoke-Checked py packaging/package.py --platform windows --stage stage/msvc --output dist/dv-windows-x64.exe --build-dir build/portable-msvc --cxx cl
     $previousPath = $env:PATH
     $previousPlugins = $env:QT_QPA_PLATFORM_PLUGIN_PATH

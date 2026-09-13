@@ -7,8 +7,4 @@ Enter-VsDevShell -VsInstallPath $visualStudio -SkipAutomaticLocation -DevCmdArgu
 $python = & py -3 -c 'import sys; print(sys.executable)'
 if ($LASTEXITCODE) { throw 'Python 3 is required.' }
 $env:PATH = "C:\Qt\Tools\CMake_64\bin;C:\Qt\Tools\Ninja;$(Split-Path $python);$env:PATH"
-function Invoke-Checked {
-    param([string]$Program, [Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments)
-    & $Program @Arguments
-    if ($LASTEXITCODE) { throw "$Program failed with exit code $LASTEXITCODE" }
-}
+. "$PSScriptRoot/invoke-checked.ps1"

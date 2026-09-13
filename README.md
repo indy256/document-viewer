@@ -68,7 +68,8 @@ The MSVC viewer uses `build/msvc`, and its portable launcher uses
 The package includes the MSVC runtime DLLs beside the application, without
 requiring users to run a separate redistributable installer.
 The `local-msvc-lto` preset can also be used from an MSVC developer shell.
-GitHub Actions continues to use the prebuilt Qt kits; the source build is local.
+GitHub Actions uses the same Qt source build and runtime deployment scripts for
+both Windows x64 and ARM64. Linux and macOS continue to use prebuilt Qt kits.
 
 ## Controls
 
@@ -153,9 +154,16 @@ substring search, zoom/session recovery, and missing-chapter error recovery.
 | `ubuntu-latest` | GCC, x64 |
 | `macos-latest` | Apple Clang, ARM64 |
 
-Each job installs Qt 6.11.2 with matching private headers, configures CMake/Ninja,
-builds, runs the offscreen Qt tests, and deploys the application with its Qt and
-PDFium dependencies. Platform-specific PDFium archives are pinned by SHA-256.
+Windows jobs compile pinned Qt 6.11.2 Base and SVG sources with MSVC, LTO, and
+size optimization. The installed Qt kits are cached by architecture, compiler,
+Windows SDK, and build-script hash. The first build after a cache change takes
+longer. Windows packages bundle the matching MSVC runtime DLLs directly, omitting
+the redistributable installer. Portable smoke tests exclude the Qt installation
+from the environment.
+
+Linux and macOS jobs install prebuilt Qt 6.11.2 with matching private headers.
+Each job configures CMake/Ninja, builds, runs the offscreen Qt tests, and deploys
+the application with its Qt and PDFium dependencies. Platform-specific PDFium archives are pinned by SHA-256.
 Failed jobs upload test logs. Successful jobs upload a
 platform artifact:
 
@@ -193,7 +201,7 @@ Link-time optimization (LTO/IPO) is enabled by default for Release, RelWithDebIn
 and MinSizeRel builds, including the Windows portable launcher. CMake checks
 compiler/linker support at configure time; use `-DDOCUMENT_VIEWER_ENABLE_LTO=OFF`
 to disable it. Prebuilt Qt and PDFium libraries are not rebuilt with LTO; the
-optional `build-qt-msvc.cmd` path above compiles Qt itself with LTO.
+`build-qt-msvc.cmd` path and Windows CI compile Qt itself with LTO.
 
 Local presets, CI, and the portable launcher use `MinSizeRel` to optimize for size
 (`-Os` with GCC/Clang, `/O1` with MSVC) while retaining LTO. GNU-linked size builds

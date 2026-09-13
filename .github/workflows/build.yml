@@ -16,27 +16,21 @@ jobs:
   build:
     name: ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: windows-latest
-            qt-host: windows
-            qt-arch: win64_msvc2022_64
             msvc-arch: x64
             package-platform: windows
             artifact-name: dv-windows-x64.exe
             package-name: dv-windows-x64.exe
-            aqt-extra: --external 7z
           - runner: windows-11-arm
-            qt-host: windows_arm64
-            qt-arch: win64_msvc2022_arm64
             msvc-arch: arm64
             package-platform: windows
             artifact-name: dv-windows-arm64.exe
             package-name: dv-windows-arm64.exe
-            aqt-extra: --external 7z
           - runner: ubuntu-latest
             qt-host: linux
             qt-arch: linux_gcc_64
@@ -64,20 +58,37 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build patchelf fonts-dejavu-core libgl1-mesa-dev libegl1 libopengl0 libxcb-cursor0 libxkbcommon-x11-0 xvfb
 
-      - name: Locate 7-Zip on Windows
+      - name: Identify Windows Qt toolchain
+        if: runner.os == 'Windows'
+        id: qt-toolchain
+        shell: pwsh
+        run: |
+          "msvc=$($env:VCToolsVersion.Trim())" >> $env:GITHUB_OUTPUT
+          "sdk=$($env:WindowsSDKVersion.TrimEnd('\'))" >> $env:GITHUB_OUTPUT
+
+      - name: Cache compiled Windows Qt
+        if: runner.os == 'Windows'
+        id: qt-cache
+        uses: actions/cache@v4
+        with:
+          path: C:/qt-lto/install
+          key: qt-source-6.11.2-${{ matrix.msvc-arch }}-${{ steps.qt-toolchain.outputs.msvc }}-${{ steps.qt-toolchain.outputs.sdk }}-${{ hashFiles('build-qt-msvc.ps1', 'scripts/invoke-checked.ps1') }}
+
+      - name: Compile Windows Qt with MSVC and LTO
+        if: runner.os == 'Windows' && steps.qt-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./build-qt-msvc.ps1 -UseCurrentEnvironment -Architecture ${{ matrix.msvc-arch }} -Prefix C:/qt-lto/install -SourceRoot C:/qt-lto/src -BuildRoot C:/qt-lto/build -Jobs 4
+
+      - name: Use compiled Windows Qt
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $sevenZip = Get-Command 7z.exe -ErrorAction SilentlyContinue
-          if ($sevenZip) {
-            Split-Path $sevenZip.Source | Out-File -FilePath $env:GITHUB_PATH -Append
-          } elseif (Test-Path 'C:\Program Files\7-Zip\7z.exe') {
-            'C:\Program Files\7-Zip' | Out-File -FilePath $env:GITHUB_PATH -Append
-          } else {
-            throw 'The Windows runner is missing 7-Zip.'
-          }
+          'C:/qt-lto/install/bin' >> $env:GITHUB_PATH
+          'CMAKE_PREFIX_PATH=C:/qt-lto/install' >> $env:GITHUB_ENV
+          'QT_QPA_PLATFORM_PLUGIN_PATH=C:/qt-lto/install/plugins/platforms' >> $env:GITHUB_ENV
 
       - name: Install Qt
+        if: runner.os != 'Windows'
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         env:
           AQT_CONFIG: ${{ github.workspace }}/.github/aqt.ini
@@ -85,12 +96,9 @@ jobs:
           version: '6.11.2'
           host: ${{ matrix.qt-host }}
           arch: ${{ matrix.qt-arch }}
-          # aqt 3.3.0 predates Qt 6.11's split Windows repository layout.
           aqtsource: git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7
           py7zrversion: '==1.1.0'
-          extra: ${{ matrix.aqt-extra || '' }}
           # Linux's default archive set also supplies Qt's matching ICU libraries.
-          archives: ${{ runner.os == 'Windows' && 'qtbase qtsvg qttools' || '' }}
           cache: true
           cache-key-prefix: qt-6.11.2-${{ matrix.runner }}
 
@@ -106,6 +114,11 @@ jobs:
       - name: Deploy application and dependencies
         run: cmake --install build
 
+      - name: Deploy MSVC runtime DLLs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/deploy-msvc-runtime.ps1 -Stage stage -Architecture ${{ matrix.msvc-arch }}
+
       - name: Install AppImage packaging tool
         if: runner.os == 'Linux'
         run: |
@@ -120,6 +133,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $env:PATH = "$env:SystemRoot/System32;$env:SystemRoot"
+          $env:QT_QPA_PLATFORM_PLUGIN_PATH = $null
+          $env:QT_PLUGIN_PATH = $null
           $app = Start-Process -FilePath "dist/${{ matrix.package-name }}" -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
           if (-not $app.WaitForExit(120000)) { Stop-Process -Id $app.Id; throw 'Portable launch timed out' }
           if ($app.ExitCode -ne 0) { throw "Portable launch failed: $($app.ExitCode)" }
