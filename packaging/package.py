@@ -29,7 +29,7 @@ if args.platform == "windows":
     build = root.parent / "build/portable"
     build.mkdir(parents=True, exist_ok=True)
     payload = build / "payload.zip"
-    with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+    with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for file in sorted(stage.rglob("*")):
             if file.is_file():
                 archive.write(file, file.relative_to(stage).as_posix())
@@ -39,7 +39,7 @@ if args.platform == "windows":
     if args.ninja:
         options.append(f"-DCMAKE_MAKE_PROGRAM={args.ninja}")
     run(args.cmake, "-S", root / "windows", "-B", build, "-G", "Ninja",
-        "-DCMAKE_BUILD_TYPE=Release", f"-DPAYLOAD={payload}", *options)
+        "-DCMAKE_BUILD_TYPE=MinSizeRel", f"-DPAYLOAD={payload}", *options)
     run(args.cmake, "--build", build, "--parallel", "2")
     shutil.copy2(build / "DocumentViewerPortable.exe", output)
 elif args.platform == "linux":

@@ -144,7 +144,7 @@ Linux artifacts target the runner's distribution/runtime generation.
 For a portable local configure with Qt available in `CMAKE_PREFIX_PATH`:
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_TESTING=ON
 cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure
 cmake --install build --prefix stage
@@ -160,6 +160,12 @@ Link-time optimization (LTO/IPO) is enabled by default for Release, RelWithDebIn
 and MinSizeRel builds, including the Windows portable launcher. CMake checks
 compiler/linker support at configure time; use `-DDOCUMENT_VIEWER_ENABLE_LTO=OFF`
 to disable it. Prebuilt Qt and PDFium libraries are not rebuilt with LTO.
+
+Local presets, CI, and the portable launcher use `MinSizeRel` to optimize for size
+(`-Os` with GCC/Clang, `/O1` with MSVC) while retaining LTO. GNU-linked size builds
+strip symbols; Apple and MSVC size builds remove unused code. Windows payloads use
+maximum ZIP compression. Most of the portable file still consists of the prebuilt
+Qt/PDFium dependencies, which retain their upstream compilation settings.
 
 ## Single-file distribution
 

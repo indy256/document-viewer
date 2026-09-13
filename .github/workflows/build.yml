@@ -91,7 +91,7 @@ jobs:
           cache-key-prefix: qt-6.11.2-${{ matrix.runner }}
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/stage -DCMAKE_INSTALL_LIBDIR=lib
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_TESTING=ON -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/stage -DCMAKE_INSTALL_LIBDIR=lib
 
       - name: Build
         run: cmake --build build --parallel 2

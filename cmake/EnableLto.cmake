@@ -1,4 +1,17 @@
 option(DOCUMENT_VIEWER_ENABLE_LTO "Enable link-time optimization in optimized builds" ON)
+# MinSizeRel supplies -Os or /O1. Strip GNU-linked size builds as well;
+# MSVC omits debug data already, while Apple uses its native dead-code removal.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_link_options("$<$<CONFIG:MinSizeRel>:-s>")
+    if(MINGW AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "14")
+        # GCC 13 can ICE with -Os and partitioned LTO; keep LTO in one partition.
+        add_link_options("$<$<CONFIG:MinSizeRel>:-flto-partition=one>")
+    endif()
+elseif(APPLE)
+    add_link_options("$<$<CONFIG:MinSizeRel>:-Wl,-dead_strip>")
+elseif(MSVC)
+    add_link_options("$<$<CONFIG:MinSizeRel>:/OPT:REF>" "$<$<CONFIG:MinSizeRel>:/OPT:ICF>")
+endif()
 if(DOCUMENT_VIEWER_ENABLE_LTO)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT lto_supported OUTPUT lto_error LANGUAGES CXX)
