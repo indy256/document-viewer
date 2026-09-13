@@ -26,8 +26,10 @@ bool DocumentRequests::listen(const QString &name) {
                     if (!value.isString()) { socket->abort(); return; }
                     paths.append(value.toString());
                 }
+                disconnect(socket, &QLocalSocket::readyRead, socket, nullptr);
                 socket->write("OK\n");
-                socket->disconnectFromServer();
+                // Let the client close after reading the acknowledgment. Closing
+                // here can race its pending write completion on Windows pipes.
                 emit received(paths);
             };
             connect(socket, &QLocalSocket::readyRead, socket, read);

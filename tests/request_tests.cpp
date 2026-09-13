@@ -27,7 +27,10 @@ private slots:
         QTRY_COMPARE(received.count(), 1);
         QCOMPARE(received.at(0).at(0).toStringList(), QStringList({"/first.pdf", "/second.epub"}));
         QTRY_VERIFY(socket.bytesAvailable() > 0);
+        // The server must not close while the client is still awaiting its reply.
+        QCOMPARE(socket.state(), QLocalSocket::ConnectedState);
         QCOMPARE(socket.readAll(), QByteArray("OK\n"));
+        socket.disconnectFromServer();
     }
     void forwarding_data() {
         QTest::addColumn<int>("delay");
