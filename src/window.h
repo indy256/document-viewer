@@ -183,6 +183,20 @@ public:
     }
 
     bool openPdf(const QString &path, bool restoring = false) {
+        const QFileInfo requested(path);
+        for (int i = 0; i < tabs->count(); ++i) {
+            auto existing = qobject_cast<PdfView *>(tabs->widget(i));
+            if (!existing || !existing->pageCount()) continue;
+            const QFileInfo openedFile(existing->property("documentPath").toString());
+            // QFileInfo resolves relative paths and symlinks and uses the
+            // filesystem's case sensitivity. Avoid comparing missing entries.
+            if (requested.absoluteFilePath() == openedFile.absoluteFilePath()
+                || (requested.exists() && openedFile.exists() && requested == openedFile)) {
+                tabs->setCurrentIndex(i);
+                existing->setFocus();
+                return true;
+            }
+        }
         auto candidate = std::make_unique<PdfView>();
         candidate->resize(tabs->contentsRect().size());
         QString error;

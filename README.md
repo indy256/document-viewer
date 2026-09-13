@@ -10,6 +10,9 @@ locks are released or recovered after exit or a crash.
 Each document opens in its own closable, reorderable tab and retains its scroll position
 and zoom. Select PDFs and EPUBs in the open dialog, drop multiple files, or pass
 multiple file paths at startup. Closing the last tab returns to the welcome view.
+Opening a file that is already open switches to its existing tab, preserving its
+position, zoom, and search. Relative paths and symbolic links to the same document
+are recognized; separate files with the same name still get separate tabs.
 
 The app automatically saves the tab order, active tab, each document's horizontal
 and vertical scroll positions, zoom percentage and fit mode, and window geometry

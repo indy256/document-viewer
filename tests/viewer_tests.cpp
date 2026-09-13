@@ -154,7 +154,9 @@ private slots:
         view->search("banana"); // Cancel an obsolete query before its first page is scanned.
         QTRY_VERIFY(!view->isSearching());
         QCOMPARE(view->matchCount(), 1);
-        QVERIFY(window.openPdf(path));
+        const auto otherPath = directory.filePath("other.pdf");
+        QVERIFY(QFile::copy(path, otherPath));
+        QVERIFY(window.openPdf(otherPath));
         auto other = qobject_cast<PdfView *>(tabs->currentWidget());
         QVERIFY(other->searchText().isEmpty());
         other->search("another");
@@ -261,6 +263,80 @@ private slots:
         QTest::qWait(30);
         QCOMPARE(window.findChild<QTabWidget *>()->count(), 1);
         QVERIFY(window.statusBar()->currentMessage().contains("invalid"));
+    }
+    void duplicateOpen_data() {
+        QTest::addColumn<QString>("extension");
+        QTest::newRow("PDF") << QString("pdf");
+        QTest::newRow("EPUB") << QString("epub");
+    }
+    void duplicateOpen() {
+        QFETCH(QString, extension);
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto path = directory.filePath("book." + extension);
+        if (extension == "epub") {
+            makeBook(path, false, "3.0");
+        } else {
+            QPdfWriter writer(path);
+            writer.setResolution(72);
+            QPainter painter(&writer);
+            painter.drawText(50, 100, "needle on first page");
+            writer.newPage();
+            painter.drawText(50, 100, "needle on second page");
+        }
+        QVERIFY(QDir(directory.path()).mkdir("other"));
+        const auto otherPath = directory.filePath("other/book." + extension);
+        QVERIFY(QFile::copy(path, otherPath));
+        Window window;
+        window.show();
+        QVERIFY(window.openPdf(path));
+        auto tabs = window.findChild<QTabWidget *>();
+        auto original = qobject_cast<PdfView *>(tabs->currentWidget());
+        original->search("needle");
+        QTRY_VERIFY(!original->isSearching());
+        original->nextMatch();
+        const int match = original->currentMatch();
+        original->setZoom(1.8);
+        original->goToPage(1);
+        const int position = original->verticalScrollBar()->value();
+        QVERIFY(window.openPdf(path)); // Reopening the active file also preserves state.
+        QCOMPARE(tabs->count(), 1);
+        QCOMPARE(tabs->currentWidget(), original);
+        QVERIFY(window.openPdf(otherPath)); // Same name and contents, different file.
+        QCOMPARE(tabs->count(), 2);
+        auto other = tabs->currentWidget();
+        QVERIFY(other != original);
+        const QStringList aliases{
+            path,
+            QDir::current().relativeFilePath(path),
+            directory.filePath("other/../book." + extension),
+#ifdef Q_OS_WIN
+            QDir::toNativeSeparators(path.toUpper()),
+#endif
+        };
+        for (const auto &alias : aliases) {
+            tabs->setCurrentWidget(other);
+            QVERIFY(window.openPdf(alias));
+            QCOMPARE(tabs->count(), 2);
+            QCOMPARE(tabs->currentWidget(), original);
+            QCOMPARE(original->zoom(), 1.8);
+            QCOMPARE(original->verticalScrollBar()->value(), position);
+            QCOMPARE(original->searchText(), QString("needle"));
+            QCOMPARE(original->currentMatch(), match);
+            QCOMPARE(window.findChild<QComboBox *>()->currentText(), QString("180%"));
+        }
+#ifndef Q_OS_WIN
+        const auto link = directory.filePath("linked." + extension);
+        QVERIFY(QFile::link(path, link));
+        tabs->setCurrentWidget(other);
+        QVERIFY(window.openPdf(link));
+        QCOMPARE(tabs->count(), 2);
+        QCOMPARE(tabs->currentWidget(), original);
+#endif
+        window.closeTab(tabs->indexOf(original));
+        QVERIFY(window.openPdf(path)); // Closing removes the file from the open set.
+        QCOMPARE(tabs->count(), 2);
+        QVERIFY(tabs->currentWidget() != other);
     }
     void multipleTabs() {
         QTemporaryDir directory;
