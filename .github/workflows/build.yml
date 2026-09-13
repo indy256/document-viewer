@@ -85,7 +85,8 @@ jobs:
           aqtsource: git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7
           py7zrversion: '==1.1.0'
           extra: ${{ matrix.aqt-extra || '' }}
-          archives: qtbase qtsvg qttools
+          # Linux's default archive set also supplies Qt's matching ICU libraries.
+          archives: ${{ runner.os == 'Windows' && 'qtbase qtsvg qttools' || '' }}
           cache: true
           cache-key-prefix: qt-6.11.2-${{ matrix.runner }}
 
