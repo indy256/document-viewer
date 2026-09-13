@@ -108,6 +108,11 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure --timeout 120
 
+      - name: Show request test diagnostics
+        if: failure()
+        shell: bash
+        run: cat build/Testing/Temporary/request-tests.txt 2>/dev/null || true
+
       - name: Deploy application and dependencies
         run: cmake --install build
 
