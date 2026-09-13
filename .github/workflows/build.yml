@@ -75,6 +75,8 @@ jobs:
 
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
+        env:
+          AQT_CONFIG: ${{ github.workspace }}/.github/aqt.ini
         with:
           version: '6.11.2'
           host: ${{ matrix.qt-host }}
@@ -83,6 +85,7 @@ jobs:
           aqtsource: git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7
           py7zrversion: '==1.1.0'
           extra: ${{ matrix.aqt-extra || '' }}
+          archives: qtbase qtsvg qttools
           cache: true
           cache-key-prefix: qt-6.11.2-${{ matrix.runner }}
 
