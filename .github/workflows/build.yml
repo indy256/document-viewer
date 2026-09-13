@@ -108,6 +108,10 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure --timeout 120
 
+      - name: Check repeated Windows document requests
+        if: runner.os == 'Windows'
+        run: ctest --test-dir build -R request_tests --repeat until-fail:30 --output-on-failure --timeout 120
+
       - name: Show request test diagnostics
         if: failure()
         shell: bash
