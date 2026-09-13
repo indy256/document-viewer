@@ -10,8 +10,17 @@
 #include <QTest>
 #include <QWheelEvent>
 #include <QFontDatabase>
-#include <QtCore/private/qzipwriter_p.h>
-#include <QBuffer>
+#include <QAction>
+#include <QComboBox>
+#include <QDir>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLineEdit>
+#include <QSpinBox>
+#include <QStatusBar>
+#include <QTabWidget>
 
 class ViewerTests : public QObject {
     Q_OBJECT
@@ -42,7 +51,7 @@ private slots:
             Window window(sessionPath);
             window.show();
             QTest::qWait(20);
-            QVERIFY(window.openPdf(epubPath));
+            QVERIFY(window.openDocument(epubPath));
             auto view = qobject_cast<PdfView *>(window.findChild<QTabWidget *>()->currentWidget());
             QCOMPARE(view->pageCount(), 2);
             const auto image = view->viewport()->grab().toImage();
@@ -102,7 +111,7 @@ private slots:
         window.show();
         window.activateWindow();
         QVERIFY(QTest::qWaitForWindowActive(&window));
-        QVERIFY(window.openPdf(path));
+        QVERIFY(window.openDocument(path));
         auto tabs = window.findChild<QTabWidget *>();
         auto view = qobject_cast<PdfView *>(tabs->currentWidget());
         QTest::keyClick(view, Qt::Key_F, Qt::ControlModifier);
@@ -156,7 +165,7 @@ private slots:
         QCOMPARE(view->matchCount(), 1);
         const auto otherPath = directory.filePath("other.pdf");
         QVERIFY(QFile::copy(path, otherPath));
-        QVERIFY(window.openPdf(otherPath));
+        QVERIFY(window.openDocument(otherPath));
         auto other = qobject_cast<PdfView *>(tabs->currentWidget());
         QVERIFY(other->searchText().isEmpty());
         other->search("another");
@@ -184,13 +193,13 @@ private slots:
             Window window(sessionPath, 50);
             window.show();
             QTest::qWait(20); // Let startup restoration complete before opening documents.
-            window.openPdf(firstPath);
+            window.openDocument(firstPath);
             auto tabs = window.findChild<QTabWidget *>();
             auto first = qobject_cast<PdfView *>(tabs->currentWidget());
             first->setZoom(2.0);
             first->horizontalScrollBar()->setValue(120);
             first->verticalScrollBar()->setValue(1300);
-            window.openPdf(secondPath);
+            window.openDocument(secondPath);
             auto second = qobject_cast<PdfView *>(tabs->currentWidget());
             second->setFit(PdfView::Fit::Page);
             second->goToPage(1);
@@ -289,7 +298,7 @@ private slots:
         QVERIFY(QFile::copy(path, otherPath));
         Window window;
         window.show();
-        QVERIFY(window.openPdf(path));
+        QVERIFY(window.openDocument(path));
         auto tabs = window.findChild<QTabWidget *>();
         auto original = qobject_cast<PdfView *>(tabs->currentWidget());
         original->search("needle");
@@ -299,10 +308,10 @@ private slots:
         original->setZoom(1.8);
         original->goToPage(1);
         const int position = original->verticalScrollBar()->value();
-        QVERIFY(window.openPdf(path)); // Reopening the active file also preserves state.
+        QVERIFY(window.openDocument(path)); // Reopening the active file also preserves state.
         QCOMPARE(tabs->count(), 1);
         QCOMPARE(tabs->currentWidget(), original);
-        QVERIFY(window.openPdf(otherPath)); // Same name and contents, different file.
+        QVERIFY(window.openDocument(otherPath)); // Same name and contents, different file.
         QCOMPARE(tabs->count(), 2);
         auto other = tabs->currentWidget();
         QVERIFY(other != original);
@@ -316,7 +325,7 @@ private slots:
         };
         for (const auto &alias : aliases) {
             tabs->setCurrentWidget(other);
-            QVERIFY(window.openPdf(alias));
+            QVERIFY(window.openDocument(alias));
             QCOMPARE(tabs->count(), 2);
             QCOMPARE(tabs->currentWidget(), original);
             QCOMPARE(original->zoom(), 1.8);
@@ -329,12 +338,12 @@ private slots:
         const auto link = directory.filePath("linked." + extension);
         QVERIFY(QFile::link(path, link));
         tabs->setCurrentWidget(other);
-        QVERIFY(window.openPdf(link));
+        QVERIFY(window.openDocument(link));
         QCOMPARE(tabs->count(), 2);
         QCOMPARE(tabs->currentWidget(), original);
 #endif
         window.closeTab(tabs->indexOf(original));
-        QVERIFY(window.openPdf(path)); // Closing removes the file from the open set.
+        QVERIFY(window.openDocument(path)); // Closing removes the file from the open set.
         QCOMPARE(tabs->count(), 2);
         QVERIFY(tabs->currentWidget() != other);
     }
@@ -357,14 +366,14 @@ private slots:
         auto tabs = window.findChild<QTabWidget *>();
         QVERIFY(tabs);
         QCOMPARE(tabs->count(), 1);
-        window.openPdf(firstPath);
+        window.openDocument(firstPath);
         QCOMPARE(tabs->count(), 1); // The welcome tab is replaced.
         auto first = qobject_cast<PdfView *>(tabs->currentWidget());
         QVERIFY(first);
         first->setZoom(1.5);
         first->goToPage(1);
         const int position = first->verticalScrollBar()->value();
-        window.openPdf(secondPath);
+        window.openDocument(secondPath);
         QCOMPARE(tabs->count(), 2);
         auto second = qobject_cast<PdfView *>(tabs->currentWidget());
         QVERIFY(second != first);
@@ -387,7 +396,7 @@ private slots:
         QCOMPARE(tabs->count(), 1);
         QCOMPARE(qobject_cast<PdfView *>(tabs->currentWidget())->pageCount(), 0);
         QVERIFY(!window.findChild<QComboBox *>()->isEnabled());
-        window.openPdf(secondPath);
+        window.openDocument(secondPath);
         QCOMPARE(tabs->count(), 1);
         QCOMPARE(qobject_cast<PdfView *>(tabs->currentWidget())->pageCount(), 2);
     }

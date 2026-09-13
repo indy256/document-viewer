@@ -1,11 +1,14 @@
 #include "window.h"
+#include <QApplication>
 #include <QStandardPaths>
 #include <QLockFile>
 #include <QIcon>
+#include <QDir>
+#include <QFont>
+#include <QMessageBox>
+#include <QTimer>
+#include <fpdfview.h>
 #ifdef Q_OS_WIN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
 #include <windows.h>
 #endif
 
@@ -48,7 +51,7 @@ int main(int argc, char **argv) {
         if (app.arguments().size() > 1) {
             const auto paths = app.arguments().mid(1);
             QTimer::singleShot(0, &window, [&window, paths] {
-                for (const auto &path : paths) window.openPdf(path);
+                for (const auto &path : paths) window.openDocument(path);
             });
         }
         result = app.exec();

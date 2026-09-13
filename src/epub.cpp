@@ -13,6 +13,7 @@
 #include <QTextImageFormat>
 #include <QUrl>
 #include <QXmlStreamReader>
+#include <algorithm>
 
 namespace {
 // Resolve archive URLs without extracting files or allowing local/network resources.

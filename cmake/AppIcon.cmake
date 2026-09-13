@@ -1,0 +1,7 @@
+function(add_windows_app_icon target)
+    set(APP_ICON "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../resources/icons/DocumentViewer.ico")
+    set(resource "${CMAKE_CURRENT_BINARY_DIR}/${target}-icon.rc")
+    configure_file("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../resources/app-icon.rc.in" "${resource}" @ONLY)
+    set_source_files_properties("${resource}" PROPERTIES OBJECT_DEPENDS "${APP_ICON}")
+    target_sources(${target} PRIVATE "${resource}")
+endfunction()

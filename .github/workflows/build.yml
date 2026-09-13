@@ -129,13 +129,7 @@ jobs:
       - name: Test portable Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          $env:PATH = "$env:SystemRoot/System32;$env:SystemRoot"
-          $env:QT_QPA_PLATFORM_PLUGIN_PATH = $null
-          $env:QT_PLUGIN_PATH = $null
-          $app = Start-Process -FilePath "dist/${{ matrix.package-name }}" -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
-          if (-not $app.WaitForExit(120000)) { Stop-Process -Id $app.Id; throw 'Portable launch timed out' }
-          if ($app.ExitCode -ne 0) { throw "Portable launch failed: $($app.ExitCode)" }
+        run: ./scripts/test-portable.ps1 -Executable "dist/${{ matrix.package-name }}"
 
       - name: Test Linux AppImage
         if: runner.os == 'Linux'

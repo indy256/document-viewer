@@ -15,18 +15,7 @@ if ($Package) {
     Invoke-Checked cmake --install build/msvc --prefix stage/msvc
     & "$PSScriptRoot/scripts/deploy-msvc-runtime.ps1" -Stage stage/msvc -Architecture x64
     Invoke-Checked py packaging/package.py --platform windows --stage stage/msvc --output dist/dv-windows-x64.exe --build-dir build/portable-msvc --cxx cl
-    $previousPath = $env:PATH
-    $previousPlugins = $env:QT_QPA_PLATFORM_PLUGIN_PATH
-    try {
-        $env:PATH = "$env:SystemRoot/System32;$env:SystemRoot"
-        $env:QT_QPA_PLATFORM_PLUGIN_PATH = $null
-        $app = Start-Process -FilePath 'dist/dv-windows-x64.exe' -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
-    } finally {
-        $env:PATH = $previousPath
-        $env:QT_QPA_PLATFORM_PLUGIN_PATH = $previousPlugins
-    }
-    if (-not $app.WaitForExit(120000)) { Stop-Process -Id $app.Id; throw 'Portable launch timed out' }
-    if ($app.ExitCode -ne 0) { throw "Portable launch failed: $($app.ExitCode)" }
+    & "$PSScriptRoot/scripts/test-portable.ps1" -Executable dist/dv-windows-x64.exe
     Write-Host 'Portable app: dist/dv-windows-x64.exe'
 }
 Write-Host 'Ready: build/msvc/DocumentViewer.exe'

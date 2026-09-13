@@ -14,7 +14,10 @@ if(WIN32)
     add_compile_definitions(NOMINMAX)
 endif()
 
-add_library(viewer_core src/pdfview.cpp src/pdfview.h src/epub.cpp src/epub.h)
+add_library(viewer_core
+    src/pdfview.cpp src/pdfview.h
+    src/epub.cpp src/epub.h
+    src/window.cpp src/window.h)
 target_link_libraries(viewer_core PUBLIC Qt6::Widgets pdfium_runtime)
 target_link_libraries(viewer_core PRIVATE Qt6::CorePrivate)
 target_include_directories(viewer_core PUBLIC src)
@@ -26,10 +29,8 @@ qt_add_resources(DocumentViewer app_icon
     FILES resources/icons/DocumentViewer.png)
 if(WIN32)
     enable_language(RC)
-    set(APP_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/DocumentViewer.ico")
-    configure_file(resources/app-icon.rc.in app-icon.rc @ONLY)
-    set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/app-icon.rc" PROPERTIES OBJECT_DEPENDS "${APP_ICON}")
-    target_sources(DocumentViewer PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app-icon.rc")
+    include(cmake/AppIcon.cmake)
+    add_windows_app_icon(DocumentViewer)
 elseif(APPLE)
     set_source_files_properties(resources/icons/DocumentViewer.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     target_sources(DocumentViewer PRIVATE resources/icons/DocumentViewer.icns)
@@ -45,7 +46,7 @@ elseif(APPLE)
     # The installed executable has only bundle-relative rpaths. Stage PDFium
     # before macdeployqt scans dependencies so it can resolve that path.
     install(FILES "$<TARGET_FILE:pdfium_runtime>" DESTINATION DocumentViewer.app/Contents/Frameworks)
-elseif(NOT APPLE)
+else()
     install(FILES "$<TARGET_FILE:pdfium_runtime>" DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
 qt_generate_deploy_app_script(TARGET DocumentViewer OUTPUT_SCRIPT deploy_script NO_TRANSLATIONS)
