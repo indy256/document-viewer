@@ -27,12 +27,14 @@ jobs:
             msvc-arch: x64
             package-platform: windows
             extension: exe
+            aqt-extra: --external 7z
           - runner: windows-11-arm
             qt-host: windows_arm64
             qt-arch: win64_msvc2022_arm64
             msvc-arch: arm64
             package-platform: windows
             extension: exe
+            aqt-extra: --external 7z
           - runner: ubuntu-latest
             qt-host: linux
             qt-arch: linux_gcc_64
@@ -58,6 +60,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build patchelf fonts-dejavu-core libgl1-mesa-dev libegl1 libopengl0 libxcb-cursor0 libxkbcommon-x11-0 xvfb
 
+      - name: Locate 7-Zip on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $sevenZip = Get-Command 7z.exe -ErrorAction SilentlyContinue
+          if ($sevenZip) {
+            Split-Path $sevenZip.Source | Out-File -FilePath $env:GITHUB_PATH -Append
+          } elseif (Test-Path 'C:\Program Files\7-Zip\7z.exe') {
+            'C:\Program Files\7-Zip' | Out-File -FilePath $env:GITHUB_PATH -Append
+          } else {
+            throw 'The Windows runner is missing 7-Zip.'
+          }
+
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4
         with:
@@ -67,6 +82,7 @@ jobs:
           # aqt 3.3.0 predates Qt 6.11's split Windows repository layout.
           aqtsource: git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7
           py7zrversion: '==1.1.0'
+          extra: ${{ matrix.aqt-extra || '' }}
           cache: true
           cache-key-prefix: qt-6.11.2-${{ matrix.runner }}
 
