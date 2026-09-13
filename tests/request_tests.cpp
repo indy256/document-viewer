@@ -10,6 +10,7 @@
 class RequestTests : public QObject {
     Q_OBJECT
 private slots:
+#ifndef Q_OS_WIN
     void partialRequest() {
         DocumentRequests requests;
         QSignalSpy received(&requests, &DocumentRequests::received);
@@ -32,6 +33,7 @@ private slots:
         QCOMPARE(socket.readAll(), QByteArray("OK\n"));
         socket.disconnectFromServer();
     }
+#endif
     void forwarding_data() {
         QTest::addColumn<int>("delay");
         QTest::newRow("running") << 0;

@@ -71,7 +71,6 @@ int main(int argc, char **argv) {
     int result;
     {
         Window window(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/session.json");
-        window.show();
         QObject::connect(&requests, &DocumentRequests::received, &window, [&window](const QStringList &requested) {
             for (const auto &path : requested) window.openDocument(path);
             if (window.isMinimized()) window.showNormal();
@@ -81,6 +80,7 @@ int main(int argc, char **argv) {
         QTimer::singleShot(0, &window, [&window, paths] {
             for (const auto &path : paths) window.openDocument(path);
         });
+        window.show();
         result = app.exec();
     }
     FPDF_DestroyLibrary();

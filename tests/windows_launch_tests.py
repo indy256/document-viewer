@@ -1,6 +1,9 @@
+import itertools
 import ctypes, ctypes.wintypes as w, json, os, subprocess, sys, tempfile, time
 from pathlib import Path
-executables = [Path(arg).resolve() for arg in sys.argv[1:]]
+cross = "--cross" in sys.argv
+sys.stdout.reconfigure(encoding="utf-8")
+executables = [Path(arg).resolve() for arg in sys.argv[1:] if arg != "--cross"]
 assert executables and all(path.is_file() for path in executables)
 fixtures = tempfile.TemporaryDirectory(prefix="dv-launch-tests-")
 work = Path(fixtures.name)
@@ -12,7 +15,8 @@ def pdf(path):
     pos=len(data); data+=b'xref\n0 4\n0000000000 65535 f \n'
     data+=b''.join(f'{o:010d} 00000 n \n'.encode() for o in offsets[1:])
     data+=f'trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n{pos}\n%%EOF\n'.encode();path.write_bytes(data)
-for name in ['first.pdf', 'second book.pdf']: pdf(work/name)
+second_name = 'second book \u041a\u043d\u0438\u0433\u0430.pdf'
+for name in ['first.pdf', second_name]: pdf(work/name)
 u=ctypes.windll.user32
 cb=ctypes.WINFUNCTYPE(w.BOOL,w.HWND,w.LPARAM)
 u.PostMessageW.argtypes=[w.HWND,w.UINT,w.WPARAM,w.LPARAM]
@@ -36,31 +40,31 @@ def wait_for_documents(expected):
     state = {}
     while time.monotonic() < deadline:
         if session.exists():
-            state = json.loads(session.read_text())
+            state = json.loads(session.read_text(encoding="utf-8"))
             actual = [Path(item['path']) for item in state.get('documents', [])]
             if actual == expected:
                 return state
         time.sleep(0.1)
     raise AssertionError(f"Expected {expected}, saved state: {state}; windows: {windows()}")
 try:
- for exe in executables:
-    print(f"Testing repeated launches: {exe}", flush=True)
+ for exe, sender in (itertools.permutations(executables, 2) if cross else ((exe, exe) for exe in executables)):
+    print(f"Testing receiver: {exe}; sender: {sender}", flush=True)
     session.parent.mkdir(parents=True, exist_ok=True)
     session.write_text('{"version":1,"documents":[]}')
     first=subprocess.Popen([str(exe),'first.pdf'],cwd=work)
     processes.append(first)
     wait_for_documents([work/'first.pdf'])
-    second=subprocess.Popen([str(exe),'second book.pdf'],cwd=work)
+    second=subprocess.Popen([str(sender),second_name],cwd=work)
     processes.append(second)
     assert second.wait(20) == 0, f"Second launch failed: {windows()}"
-    state = wait_for_documents([work/'first.pdf', work/'second book.pdf'])
+    state = wait_for_documents([work/'first.pdf', work/second_name])
     assert state['activeTab'] == 1, state
-    duplicate=subprocess.Popen([str(exe),str(work/'first.pdf')],cwd=work.parent)
+    duplicate=subprocess.Popen([str(sender),str(work/'first.pdf')],cwd=work.parent)
     processes.append(duplicate)
     assert duplicate.wait(20) == 0
     deadline=time.monotonic()+15
     while time.monotonic() < deadline:
-        state=json.loads(session.read_text())
+        state=json.loads(session.read_text(encoding="utf-8"))
         if state['activeTab'] == 0: break
         time.sleep(0.1)
     assert len(state['documents']) == 2 and state['activeTab'] == 0, state
