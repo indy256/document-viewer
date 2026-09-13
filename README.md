@@ -4,7 +4,10 @@ A native C++ / Qt Widgets PDF and EPUB reader with multiple document tabs, conti
 vertical scrolling, and zoom from 10% to 500%.
 
 Only one instance runs per Windows login session (per user on Linux/macOS). A
-second launch exits without opening a window or modifying saved state. Instance
+second launch forwards its file paths to the running window, then exits. For example,
+`DocumentViewer first.pdf` followed by `DocumentViewer second.epub` opens both
+documents in the same window. Multiple paths per command are supported; quote
+paths containing spaces. Relative paths use the launching terminal?s directory. Instance
 locks are released or recovered after exit or a crash.
 
 Each document opens in its own closable, reorderable tab and retains its scroll position

@@ -1,4 +1,7 @@
 #include "window.h"
+#include "documentrequests.h"
+#include <QCryptographicHash>
+#include <QFileInfo>
 #include <QApplication>
 #include <QStandardPaths>
 #include <QLockFile>
@@ -7,6 +10,7 @@
 #include <QFont>
 #include <QMessageBox>
 #include <QTimer>
+#include <QScopeGuard>
 #include <fpdfview.h>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -22,6 +26,21 @@ int main(int argc, char **argv) {
         FPDF_DestroyLibrary();
         return 0;
     }
+    QStringList paths;
+    for (const auto &path : app.arguments().mid(1)) paths.append(QFileInfo(path).absoluteFilePath());
+    const auto dataDirectory = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QString serverName = "DocumentViewer-" + QString::fromLatin1(
+        QCryptographicHash::hash(dataDirectory.toUtf8(), QCryptographicHash::Sha256).toHex().left(24));
+#ifdef Q_OS_WIN
+    DWORD sessionId = 0;
+    ProcessIdToSessionId(GetCurrentProcessId(), &sessionId);
+    serverName += "-" + QString::number(sessionId);
+#endif
+    auto forward = [&] {
+        if (DocumentRequests::send(serverName, paths)) return 0;
+        QMessageBox::warning(nullptr, "Document Viewer", "Could not send documents to the running application. Please try again.");
+        return 1;
+    };
 #ifdef Q_OS_WIN
     // Windows releases this named mutex even if the owning process crashes.
     const HANDLE instanceMutex = CreateMutexW(nullptr, FALSE, L"Local\\DocumentViewer.SingleInstance");
@@ -32,15 +51,20 @@ int main(int argc, char **argv) {
     }
     if (mutexError == ERROR_ALREADY_EXISTS) {
         CloseHandle(instanceMutex);
-        return 0;
+        return forward();
     }
+    const auto releaseInstance = qScopeGuard([&] { CloseHandle(instanceMutex); });
 #else
-    const auto dataDirectory = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     if (!QDir().mkpath(dataDirectory)) return 1;
     QLockFile instanceLock(dataDirectory + "/instance.lock");
     instanceLock.setStaleLockTime(0); // A live process never expires; crashed processes are detected.
-    if (!instanceLock.tryLock()) return instanceLock.error() == QLockFile::LockFailedError ? 0 : 1;
+    if (!instanceLock.tryLock()) return instanceLock.error() == QLockFile::LockFailedError ? forward() : 1;
 #endif
+    DocumentRequests requests;
+    if (!requests.listen(serverName)) {
+        QMessageBox::critical(nullptr, "Document Viewer", "Could not start the document request service.");
+        return 1;
+    }
     app.setStyle("Fusion");
     app.setFont(QFont("Segoe UI", 10));
     FPDF_InitLibrary();
@@ -48,17 +72,17 @@ int main(int argc, char **argv) {
     {
         Window window(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/session.json");
         window.show();
-        if (app.arguments().size() > 1) {
-            const auto paths = app.arguments().mid(1);
-            QTimer::singleShot(0, &window, [&window, paths] {
-                for (const auto &path : paths) window.openDocument(path);
-            });
-        }
+        QObject::connect(&requests, &DocumentRequests::received, &window, [&window](const QStringList &requested) {
+            for (const auto &path : requested) window.openDocument(path);
+            if (window.isMinimized()) window.showNormal();
+            window.raise();
+            window.activateWindow();
+        }, Qt::QueuedConnection);
+        QTimer::singleShot(0, &window, [&window, paths] {
+            for (const auto &path : paths) window.openDocument(path);
+        });
         result = app.exec();
     }
     FPDF_DestroyLibrary();
-#ifdef Q_OS_WIN
-    CloseHandle(instanceMutex);
-#endif
     return result;
 }
