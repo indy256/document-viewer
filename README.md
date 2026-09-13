@@ -3,6 +3,9 @@
 A native C++ / Qt Widgets PDF and EPUB reader with multiple document tabs, continuous
 vertical scrolling, and zoom from 10% to 500%.
 
+Licensed under the [MIT License](LICENSE). Qt, PDFium, and other bundled
+third-party components retain their respective licenses.
+
 Only one instance runs per Windows login session (per user on Linux/macOS). A
 second launch forwards its file paths to the running window, then exits. For example,
 `DocumentViewer first.pdf` followed by `DocumentViewer second.epub` opens both

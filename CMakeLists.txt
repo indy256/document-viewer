@@ -54,7 +54,7 @@ qt_generate_deploy_app_script(TARGET DocumentViewer OUTPUT_SCRIPT deploy_script 
 install(SCRIPT ${deploy_script})
 install(FILES "${pdfium_SOURCE_DIR}/LICENSE" DESTINATION licenses RENAME PDFium-LICENSE.txt)
 install(DIRECTORY "${pdfium_SOURCE_DIR}/licenses/" DESTINATION licenses/pdfium)
-install(FILES README.md DESTINATION .)
+install(FILES README.md LICENSE DESTINATION .)
 
 include(CTest)
 if(BUILD_TESTING)
