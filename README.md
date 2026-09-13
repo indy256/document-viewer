@@ -171,13 +171,16 @@ platform artifact:
 | --- | --- |
 | `dv-windows-x64.exe` | `dv-windows-x64.exe` |
 | `dv-windows-arm64.exe` | `dv-windows-arm64.exe` |
-| `dv-linux-x64.AppImage` | `dv-linux-x64.AppImage.tar` containing the executable AppImage |
-| `dv-macos-arm64` | `dv-macos-arm64.dmg` |
+| `dv-linux-x64.AppImage` | Direct AppImage download |
+| `dv-linux-x64.AppImage.tar` | Uncompressed tar containing the executable AppImage |
+| `dv-macos-arm64.dmg` | Direct disk image download |
 
-GitHub wraps workflow artifacts in ZIP files. After unzipping the Linux download,
-run `tar -xf dv-linux-x64.AppImage.tar`; the AppImage retains executable permissions
-and can be launched directly. The tar wrapper avoids GitHub's artifact permission
-loss. Windows files launch directly; open the macOS disk image and launch or copy
+Workflow artifacts are uploaded directly with `archive: false`, without ZIP
+wrappers. For Linux, run `chmod +x dv-linux-x64.AppImage` after downloading the
+AppImage, or download the uncompressed tar and run
+`tar -xf dv-linux-x64.AppImage.tar` to retain executable permissions. Failed-job
+logs are also uploaded as uncompressed tar files. Windows files launch directly;
+open the macOS disk image and launch or copy
 `DocumentViewer.app`.
 The macOS app is not Developer ID signed or notarized.
 Linux artifacts target the runner's distribution/runtime generation.
