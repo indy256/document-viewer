@@ -145,27 +145,10 @@ jobs:
         if: runner.os == 'macOS'
         run: stage/DocumentViewer.app/Contents/MacOS/DocumentViewer --smoke-test
 
-      - name: Preserve Linux executable permissions
-        if: runner.os == 'Linux'
-        run: |
-          test -x dist/${{ matrix.package-name }}
-          tar -cf dist/${{ matrix.package-name }}.tar -C dist ${{ matrix.package-name }}
-          mkdir -p build/artifact-check
-          tar -xf dist/${{ matrix.package-name }}.tar -C build/artifact-check
-          test -x build/artifact-check/${{ matrix.package-name }}
-
       - name: Upload application
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           path: dist/${{ matrix.package-name }}
-          archive: false
-          if-no-files-found: error
-
-      - name: Upload Linux archive with executable permissions
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          path: dist/${{ matrix.package-name }}.tar
           archive: false
           if-no-files-found: error
 
@@ -207,12 +190,9 @@ jobs:
         run: |
           set -euo pipefail
           cd release-files
-          for file in dv-windows-x64.exe dv-windows-arm64.exe dv-macos-arm64.dmg dv-linux-x64.AppImage.tar; do
+          for file in dv-windows-x64.exe dv-windows-arm64.exe dv-macos-arm64.dmg dv-linux-x64.AppImage; do
             test -s "$file"
           done
-          tar -xf dv-linux-x64.AppImage.tar dv-linux-x64.AppImage
-          test -x dv-linux-x64.AppImage
-          test -s dv-linux-x64.AppImage
 
       - name: Publish all platform downloads
         shell: bash

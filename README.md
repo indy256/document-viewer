@@ -172,14 +172,11 @@ platform artifact:
 | `dv-windows-x64.exe` | `dv-windows-x64.exe` |
 | `dv-windows-arm64.exe` | `dv-windows-arm64.exe` |
 | `dv-linux-x64.AppImage` | Direct AppImage download |
-| `dv-linux-x64.AppImage.tar` | Uncompressed tar containing the executable AppImage |
 | `dv-macos-arm64.dmg` | Direct disk image download |
 
 Workflow artifacts are uploaded directly with `archive: false`, without ZIP
 wrappers. For Linux, run `chmod +x dv-linux-x64.AppImage` after downloading the
-AppImage, or download the uncompressed tar and run
-`tar -xf dv-linux-x64.AppImage.tar` to retain executable permissions. Failed-job
-logs are also uploaded as uncompressed tar files. Windows files launch directly;
+AppImage. Failed-job logs are uploaded as uncompressed tar files. Windows files launch directly;
 open the macOS disk image and launch or copy
 `DocumentViewer.app`.
 The macOS app is not Developer ID signed or notarized.
@@ -251,9 +248,8 @@ Tags containing a hyphen, such as `v1.1.0-rc.1`, produce prereleases.
 
 Release assets are direct downloads: `dv-windows-x64.exe`,
 `dv-windows-arm64.exe`, `dv-macos-arm64.dmg`, and `dv-linux-x64.AppImage`.
-For Linux, either run `chmod +x dv-linux-x64.AppImage` after downloading, or use
-the additional uncompressed `dv-linux-x64.AppImage.tar` download and extract it
-to retain executable permissions. No ZIP wrapper is added to release downloads.
+For Linux, run `chmod +x dv-linux-x64.AppImage` after downloading.
+No ZIP wrapper is added to release downloads.
 
 Release notes are generated automatically. All assets are uploaded to a draft
 before publication. Existing releases are never overwritten; if an upload fails,
