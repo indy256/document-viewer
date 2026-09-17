@@ -159,9 +159,9 @@ bool installLatest(QWidget *parent, const std::function<bool()> &saveSession) {
     progress.setAutoClose(false);
     progress.show();
     QString error;
-    const auto failure = [&] {
+    const auto failure = [&](const QString &message = QString()) {
         progress.hide();
-        return progress.wasCanceled() ? false : notify(error);
+        return progress.wasCanceled() ? false : notify(message.isEmpty() ? error : message);
     };
     const auto download = [&](const QUrl &url, const QString &path, qint64 maxSize) {
         return execute(progress, curl, {"--fail", "--location", "--silent", "--show-error",
@@ -175,10 +175,8 @@ bool installLatest(QWidget *parent, const std::function<bool()> &saveSession) {
                   metadataPath, 2 * 1024 * 1024)) return failure();
     QFile metadata(metadataPath);
     Asset asset;
-    if (!metadata.open(QIODevice::ReadOnly) || metadata.size() > 2 * 1024 * 1024) {
-        error = "Could not read the release information.";
-        return failure();
-    }
+    if (!metadata.open(QIODevice::ReadOnly) || metadata.size() > 2 * 1024 * 1024)
+        return failure("Could not read the release information.");
     const auto bytes = metadata.readAll();
     metadata.close();
     if (!readRelease(bytes, assetName, asset, error)) return failure();
@@ -193,10 +191,8 @@ bool installLatest(QWidget *parent, const std::function<bool()> &saveSession) {
     QString source = directory + "/replacement";
     if (!download(asset.url, source, asset.size)) return failure();
     progress.setLabelText("Verifying the download...");
-    if (QFileInfo(source).size() != asset.size || fileHash(source) != asset.sha256) {
-        error = "The download failed verification. The installed app has not been changed.";
-        return failure();
-    }
+    if (QFileInfo(source).size() != asset.size || fileHash(source) != asset.sha256)
+        return failure("The download failed verification. The installed app has not been changed.");
 #ifdef Q_OS_MACOS
     const auto mount = directory + "/mount";
     QDir().mkpath(mount);
@@ -211,20 +207,15 @@ bool installLatest(QWidget *parent, const std::function<bool()> &saveSession) {
     if (detach.exitStatus() != QProcess::NormalExit || detach.exitCode() != 0) {
         // A failed mount may still have attached a volume. Never delete through it.
         staging.setAutoRemove(false);
-        error = "Could not detach the update disk image. Files were retained at " + directory;
-        return failure();
+        return failure("Could not detach the update disk image. Files were retained at " + directory);
     }
     if (!copied) return failure();
-    if (!QFileInfo(source + "/Contents/MacOS/DocumentViewer").isExecutable()) {
-        error = "The disk image does not contain DocumentViewer.app.";
-        return failure();
-    }
+    if (!QFileInfo(source + "/Contents/MacOS/DocumentViewer").isExecutable())
+        return failure("The disk image does not contain DocumentViewer.app.");
 #else
     if (!QFile::setPermissions(source, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner |
-                              QFile::ReadGroup | QFile::ExeGroup | QFile::ReadOther | QFile::ExeOther)) {
-        error = "Could not prepare the replacement application.";
-        return failure();
-    }
+                              QFile::ReadGroup | QFile::ExeGroup | QFile::ReadOther | QFile::ExeOther))
+        return failure("Could not prepare the replacement application.");
 #endif
     if (progress.wasCanceled()) return false;
     QProcess helper;
@@ -238,10 +229,8 @@ bool installLatest(QWidget *parent, const std::function<bool()> &saveSession) {
     const auto planPath = directory + "/plan.json";
     QJsonObject plan{{"target", target}, {"viewerPid", QCoreApplication::applicationPid()},
                      {"launcherPid", launcherPid}};
-    if (!QFile::copy(":/updates/install.ps1", script) || !write(planPath, QJsonDocument(plan).toJson())) {
-        error = "Could not prepare the update helper.";
-        return failure();
-    }
+    if (!QFile::copy(":/updates/install.ps1", script) || !write(planPath, QJsonDocument(plan).toJson()))
+        return failure("Could not prepare the update helper.");
     helper.setArguments({"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                          "-WindowStyle", "Hidden", "-File", script, "-PlanPath", planPath});
     helper.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *args) {
@@ -249,16 +238,12 @@ bool installLatest(QWidget *parent, const std::function<bool()> &saveSession) {
     });
 #else
     const auto script = directory + "/install.sh";
-    if (!QFile::copy(":/updates/install.sh", script)) {
-        error = "Could not prepare the update helper.";
-        return failure();
-    }
+    if (!QFile::copy(":/updates/install.sh", script))
+        return failure("Could not prepare the update helper.");
     helper.setArguments({script, target, source, QString::number(QCoreApplication::applicationPid())});
 #endif
-    if (!helper.startDetached()) {
-        error = "Could not start the update helper. The app has not been changed.";
-        return failure();
-    }
+    if (!helper.startDetached())
+        return failure("Could not start the update helper. The app has not been changed.");
     staging.setAutoRemove(false); // The helper owns the staged files from here on.
     progress.setLabelText("Preparing to restart...");
     QEventLoop events;
@@ -273,18 +258,12 @@ bool installLatest(QWidget *parent, const std::function<bool()> &saveSession) {
     deadline.start(15000);
     events.exec();
     if (progress.wasCanceled()) return false;
-    if (!QFileInfo::exists(directory + "/ready")) {
-        error = "The update helper could not prepare the restart. Details: " + directory + "/helper.log";
-        return failure();
-    }
-    if (!saveSession()) {
-        error = "Could not save the reading session. The update has been canceled.";
-        return failure();
-    }
-    if (!write(directory + "/commit", "install")) {
-        error = "Could not hand off the update. The app has not been changed.";
-        return failure();
-    }
+    if (!QFileInfo::exists(directory + "/ready"))
+        return failure("The update helper could not prepare the restart. Details: " + directory + "/helper.log");
+    if (!saveSession())
+        return failure("Could not save the reading session. The update has been canceled.");
+    if (!write(directory + "/commit", "install"))
+        return failure("Could not hand off the update. The app has not been changed.");
     return true;
 }
 }

@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     FPDF_InitLibrary();
     int result;
     {
-        Window window(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/session.json");
+        Window window(dataDirectory + "/session.json");
         QObject::connect(&requests, &DocumentRequests::received, &window, [&window](const QStringList &requested) {
             if (window.isMinimized()) window.showNormal();
             window.raise();

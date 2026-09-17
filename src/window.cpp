@@ -38,7 +38,6 @@
 
 Window::Window(const QString &sessionFile, int autosaveIntervalMs)
     : sessionPath(sessionFile) {
-    setWindowTitle(QStringLiteral("Document Viewer " DOCUMENT_VIEWER_VERSION));
     resize(1100, 820);
     setMinimumSize(720, 480);
     setAcceptDrops(true);
@@ -60,8 +59,6 @@ Window::Window(const QString &sessionFile, int autosaveIntervalMs)
     connect(exitAction, &QAction::triggered, this, [this] { close(); });
     // QTabWidget provides Ctrl+Tab and Ctrl+Shift+Tab navigation.
     addEmptyTab();
-    enableControls(false);
-    statusBar()->showMessage("Ready to read");
     statusBar()->addPermanentWidget(new QLabel("Ctrl+wheel to zoom  "));
     applyStyle();
     if (!sessionPath.isEmpty()) {
@@ -264,14 +261,15 @@ bool Window::openDocument(const QString &path, bool restoring) {
         if (!restoring) QMessageBox::warning(this, "Unable to open document", error);
         return false;
     }
-    lastDirectory = QFileInfo(path).absolutePath();
+    lastDirectory = requested.absolutePath();
+    const auto absolutePath = requested.absoluteFilePath();
     auto opened = candidate.release();
-    opened->setProperty("documentPath", QFileInfo(path).absoluteFilePath());
+    opened->setProperty("documentPath", absolutePath);
     connectView(opened);
     const bool replaceEmpty = tabs->count() == 1 && view && !view->pageCount();
     auto empty = replaceEmpty ? view : nullptr;
-    const int index = tabs->addTab(opened, QFileInfo(path).fileName());
-    tabs->setTabToolTip(index, QFileInfo(path).absoluteFilePath());
+    const int index = tabs->addTab(opened, requested.fileName());
+    tabs->setTabToolTip(index, absolutePath);
     tabs->setCurrentIndex(index);
     if (empty) {
         tabs->removeTab(tabs->indexOf(empty));
