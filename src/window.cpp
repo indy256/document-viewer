@@ -1,6 +1,10 @@
 #include "window.h"
 #include "pdfview.h"
 #include <QAction>
+#include <QApplication>
+#include <QMouseEvent>
+#include <QShowEvent>
+#include <QWindow>
 #include <QComboBox>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -66,6 +70,39 @@ Window::Window(const QString &sessionFile, int autosaveIntervalMs)
             autosave->start();
         });
     }
+}
+
+void Window::showEvent(QShowEvent *event) {
+    QMainWindow::showEvent(event);
+    if (windowHandle()) windowHandle()->installEventFilter(this);
+}
+
+bool Window::eventFilter(QObject *watched, QEvent *event) {
+    if (watched == windowHandle() && view &&
+        (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease ||
+         event->type() == QEvent::MouseButtonDblClick || event->type() == QEvent::MouseMove)) {
+        auto mouse = static_cast<QMouseEvent *>(event);
+        const auto position = mouse->position();
+        auto scrollbar = view->verticalScrollBar();
+        const QRect barRect(scrollbar->mapTo(this, QPoint()), scrollbar->size());
+        // At high DPI the last physical pixel can round past the widget's
+        // right edge. Correct it before Qt picks the mouse target, preserving
+        // normal scrollbar clicks, implicit mouse grabs, and dragging.
+        if (scrollbar->isVisible() && barRect.right() == width() - 1 &&
+            position.x() >= width() - 0.5 && position.x() < width() &&
+            position.y() >= barRect.top() && position.y() < barRect.bottom() + 1) {
+            const QPointF adjusted(width() - 1, position.y());
+            const QPointF delta = adjusted - position;
+            QMouseEvent corrected(mouse->type(), adjusted, mouse->scenePosition() + delta,
+                mouse->globalPosition() + delta, mouse->button(), mouse->buttons(),
+                mouse->modifiers(), mouse->source(), mouse->pointingDevice());
+            corrected.setTimestamp(mouse->timestamp());
+            QCoreApplication::sendEvent(watched, &corrected);
+            event->setAccepted(corrected.isAccepted());
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void Window::setupToolbars() {

@@ -21,6 +21,10 @@
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QMouseEvent>
+#include <QWindow>
+#include <QStyle>
+#include <QStyleOptionSlider>
 
 class ViewerTests : public QObject {
     Q_OBJECT
@@ -458,6 +462,65 @@ private slots:
         QVERIFY(view.open(path, {}, &error));
         QCOMPARE(view.currentPage(), 0);
         QCOMPARE(view.verticalScrollBar()->value(), 0);
+    }
+    void scrollbarAtRightEdge_data() {
+        QTest::addColumn<double>("fraction");
+        QTest::newRow("whole-pixel") << 0.0;
+        QTest::newRow("200-percent") << 0.5;
+        QTest::newRow("400-percent") << 0.75;
+    }
+    void scrollbarAtRightEdge() {
+        QFETCH(double, fraction);
+        QTemporaryDir directory;
+        const auto path = directory.filePath("edge.pdf");
+        {
+            QPdfWriter writer(path);
+            QPainter painter(&writer);
+            painter.drawText(50, 100, "First page");
+            writer.newPage();
+            painter.drawText(50, 100, "Second page");
+        }
+        Window window;
+        window.showMaximized();
+        QVERIFY(window.openDocument(path));
+        QTest::qWait(50);
+        auto view = window.findChild<PdfView *>();
+        auto scrollbar = view->verticalScrollBar();
+        QVERIFY(scrollbar->maximum() > 0);
+        auto mouse = [&](QEvent::Type type, int y) {
+            // Send fractional coordinates through the window, so Qt must pick
+            // the target widget just as it does for native high-DPI input.
+            const QPointF position(window.width() - 1 + fraction,
+                                   scrollbar->mapTo(&window, QPoint(0, y)).y());
+            const auto button = type == QEvent::MouseMove ? Qt::NoButton : Qt::LeftButton;
+            const auto buttons = type == QEvent::MouseButtonRelease ? Qt::NoButton : Qt::LeftButton;
+            QMouseEvent event(type, position, position, window.mapToGlobal(position),
+                              button, buttons, Qt::NoModifier);
+            QCoreApplication::sendEvent(window.windowHandle(), &event);
+        };
+        scrollbar->setValue(scrollbar->maximum());
+        const int before = scrollbar->value();
+        mouse(QEvent::MouseButtonPress, 5);
+        mouse(QEvent::MouseButtonRelease, 5);
+        QVERIFY(scrollbar->value() < before);
+        scrollbar->setValue(before);
+        mouse(QEvent::MouseButtonPress, scrollbar->height() / 2);
+        mouse(QEvent::MouseButtonRelease, scrollbar->height() / 2);
+        QVERIFY(scrollbar->value() < before);
+        scrollbar->setValue(0);
+        QStyleOptionSlider option;
+        option.initFrom(scrollbar);
+        option.orientation = Qt::Vertical;
+        option.minimum = scrollbar->minimum();
+        option.maximum = scrollbar->maximum();
+        option.pageStep = scrollbar->pageStep();
+        option.sliderPosition = option.sliderValue = 0;
+        const auto thumb = scrollbar->style()->subControlRect(
+            QStyle::CC_ScrollBar, &option, QStyle::SC_ScrollBarSlider, scrollbar);
+        mouse(QEvent::MouseButtonPress, thumb.center().y());
+        mouse(QEvent::MouseMove, thumb.center().y() + 100);
+        mouse(QEvent::MouseButtonRelease, thumb.center().y() + 100);
+        QVERIFY(scrollbar->value() > 0);
     }
 };
 QTEST_MAIN(ViewerTests)
