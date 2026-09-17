@@ -1,5 +1,6 @@
 #include "window.h"
 #include "pdfview.h"
+#include "updater.h"
 #include <QAction>
 #include <QApplication>
 #include <QMouseEvent>
@@ -14,6 +15,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QContextMenuEvent>
+#include <QMenu>
 #include <QMimeData>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -70,6 +73,14 @@ Window::Window(const QString &sessionFile, int autosaveIntervalMs)
             autosave->start();
         });
     }
+}
+
+void Window::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu menu(this);
+    auto update = menu.addAction("Update to latest version");
+    const auto selected = menu.exec(event->globalPos());
+    event->accept();
+    if (selected == update && Updater::installLatest(this, [this] { return saveSession(); })) close();
 }
 
 void Window::showEvent(QShowEvent *event) {

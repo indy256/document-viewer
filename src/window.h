@@ -7,6 +7,7 @@ class PdfView;
 class QAction;
 class QCloseEvent;
 class QComboBox;
+class QContextMenuEvent;
 class QDragEnterEvent;
 class QDropEvent;
 class QLabel;
@@ -23,6 +24,7 @@ public:
     bool saveSession();
 
 protected:
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void showEvent(QShowEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
     void closeEvent(QCloseEvent *event) override;

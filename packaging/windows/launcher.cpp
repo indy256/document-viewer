@@ -79,6 +79,13 @@ int WINAPI WinMain(HINSTANCE module, HINSTANCE, LPSTR, int) {
         std::vector<std::wstring> args;
         for (int i = 1; argv && i < argc; ++i) args.emplace_back(argv[i]);
         if (argv) LocalFree(argv);
+        // Updating must replace this portable EXE, not the extracted payload.
+        std::vector<wchar_t> launcherPath(32768);
+        const DWORD launcherLength = GetModuleFileNameW(nullptr, launcherPath.data(), static_cast<DWORD>(launcherPath.size()));
+        if (!launcherLength || launcherLength >= launcherPath.size() ||
+            !SetEnvironmentVariableW(L"DOCUMENT_VIEWER_PORTABLE_PATH", launcherPath.data()) ||
+            !SetEnvironmentVariableW(L"DOCUMENT_VIEWER_LAUNCHER_PID", std::to_wstring(GetCurrentProcessId()).c_str()))
+            throw std::runtime_error("Could not identify the portable application.");
         const DWORD code = run(temporary / L"bin" / L"DocumentViewer.exe", args, false);
         // Only this launcher's newly created directory is removed.
         std::error_code ignored;

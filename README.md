@@ -27,6 +27,21 @@ opening any files supplied on the command line. Checkpoints use atomic file
 replacement so an interrupted write preserves the previous saved session.
 After a crash, the latest completed checkpoint is restored.
 
+Right-click the document area and choose **Update to latest version** to download the matching package from
+the latest stable GitHub release. The updater checks the download size and SHA-256
+checksum, saves the reading session, replaces the application, and restarts it
+with the same documents, active tab, zoom, and scroll positions. Downloads can be
+canceled before installation.
+
+Automatic updates support the portable Windows EXE, the Linux AppImage, and an
+installed macOS app bundle. The application folder must be writable. Windows uses
+the system curl and PowerShell; Linux and macOS require curl. Development builds
+and unpacked Windows deployment folders are not replaced by the updater.
+Update logs are retained in a `.dv-update-*` folder beside the application.
+The previous app is restored if replacement or startup fails; on Unix, a successful
+update also retains the previous app in that folder. Windows waits for the portable
+launcher to exit before replacing its EXE.
+
 Session data is stored in `%LOCALAPPDATA%\Document Viewer\session.json` on Windows,
 `~/.local/share/Document Viewer/session.json` on Linux (or `$XDG_DATA_HOME`), and
 `~/Library/Application Support/Document Viewer/session.json` on macOS.
