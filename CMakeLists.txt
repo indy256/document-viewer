@@ -1,5 +1,18 @@
 cmake_minimum_required(VERSION 3.24)
 project(DocumentViewer VERSION 1.0 LANGUAGES CXX)
+set(DOCUMENT_VIEWER_VERSION "" CACHE STRING "Displayed version (defaults to the Git release tag)")
+if(NOT DOCUMENT_VIEWER_VERSION)
+    find_package(Git QUIET)
+    if(Git_FOUND)
+        execute_process(COMMAND "${GIT_EXECUTABLE}" describe --tags --match "v[0-9]*"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            OUTPUT_VARIABLE DOCUMENT_VIEWER_VERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    endif()
+    if(NOT DOCUMENT_VIEWER_VERSION)
+        set(DOCUMENT_VIEWER_VERSION "dev")
+    endif()
+endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -27,6 +40,7 @@ qt_add_resources(viewer_core updater_scripts
 target_link_libraries(viewer_core PUBLIC Qt6::Widgets Qt6::Network pdfium_runtime)
 target_link_libraries(viewer_core PRIVATE Qt6::CorePrivate)
 target_include_directories(viewer_core PUBLIC src)
+target_compile_definitions(viewer_core PUBLIC DOCUMENT_VIEWER_VERSION="${DOCUMENT_VIEWER_VERSION}")
 qt_add_executable(DocumentViewer WIN32 MACOSX_BUNDLE src/main.cpp)
 set_target_properties(DocumentViewer PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER "org.documentviewer.app")
 qt_add_resources(DocumentViewer app_icon

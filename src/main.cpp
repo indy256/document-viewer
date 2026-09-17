@@ -19,6 +19,7 @@
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setApplicationName("Document Viewer");
+    app.setApplicationVersion(QStringLiteral(DOCUMENT_VIEWER_VERSION));
     app.setWindowIcon(QIcon(":/icons/DocumentViewer.png"));
     if (app.arguments().contains("--smoke-test")) {
         FPDF_InitLibrary();

@@ -38,7 +38,7 @@
 
 Window::Window(const QString &sessionFile, int autosaveIntervalMs)
     : sessionPath(sessionFile) {
-    setWindowTitle("Document Viewer");
+    setWindowTitle(QStringLiteral("Document Viewer " DOCUMENT_VIEWER_VERSION));
     resize(1100, 820);
     setMinimumSize(720, 480);
     setAcceptDrops(true);
@@ -415,7 +415,8 @@ void Window::syncControls() {
     total->setText(QString(" / %1  ").arg(loaded ? view->pageCount() : 0));
     zoom->setCurrentText(loaded ? QString::number(qRound(view->zoom() * 100)) + "%" : "Fit width");
     const auto path = loaded ? view->property("documentPath").toString() : QString();
-    setWindowTitle(loaded ? QFileInfo(path).fileName() + " — Document Viewer" : "Document Viewer");
+    const auto title = QStringLiteral("Document Viewer " DOCUMENT_VIEWER_VERSION);
+    setWindowTitle(loaded ? QFileInfo(path).fileName() + " — " + title : title);
     statusBar()->showMessage(loaded ? QFileInfo(path).fileName() : "Ready to read");
     syncSearch();
 }

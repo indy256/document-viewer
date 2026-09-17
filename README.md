@@ -3,6 +3,11 @@
 A native C++ / Qt Widgets PDF and EPUB reader with multiple document tabs, continuous
 vertical scrolling, and zoom from 10% to 500%.
 
+The window title shows the release tag, for example `Document Viewer v1.0.2`.
+Builds between releases also show the commit distance and hash; builds without Git
+tags show `dev`. Set `-DDOCUMENT_VIEWER_VERSION=v1.0.2` when building from a source
+archive to supply the version explicitly.
+
 Licensed under the [MIT License](LICENSE). Qt, PDFium, and other bundled
 third-party components retain their respective licenses.
 
