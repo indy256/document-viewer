@@ -1,6 +1,7 @@
 #include "epubfixture.h"
 #include "pdfview.h"
 #include "window.h"
+#include "viewerstyle.h"
 #include <QApplication>
 #include <QFile>
 #include <QPainter>
@@ -30,6 +31,7 @@ class ViewerTests : public QObject {
     Q_OBJECT
 private slots:
     void initTestCase() {
+        QApplication::setStyle(new ViewerStyle);
         FPDF_InitLibrary();
         QString fontPath = qEnvironmentVariable("DOCUMENT_VIEWER_TEST_FONT");
         if (fontPath.isEmpty()) {
@@ -463,6 +465,39 @@ private slots:
         QCOMPARE(view.currentPage(), 0);
         QCOMPARE(view.verticalScrollBar()->value(), 0);
     }
+    void scrollbarTrackDrag_data() {
+        QTest::addColumn<bool>("horizontal");
+        QTest::addColumn<int>("initialValue");
+        QTest::newRow("vertical-below") << false << 0;
+        QTest::newRow("vertical-above") << false << 1000;
+        QTest::newRow("horizontal-after") << true << 0;
+        QTest::newRow("horizontal-before") << true << 1000;
+    }
+    void scrollbarTrackDrag() {
+        QFETCH(bool, horizontal);
+        QFETCH(int, initialValue);
+        QScrollBar bar(horizontal ? Qt::Horizontal : Qt::Vertical);
+        bar.resize(horizontal ? QSize(400, 20) : QSize(20, 400));
+        bar.setRange(0, 1000);
+        bar.setPageStep(100);
+        bar.setValue(initialValue);
+        bar.show();
+        const auto center = bar.rect().center();
+        QTest::mousePress(&bar, Qt::LeftButton, Qt::NoModifier, center);
+        QVERIFY(bar.isSliderDown());
+        QVERIFY(bar.value() != initialValue);
+        const int pressedValue = bar.value();
+        const auto moved = center + (horizontal ? QPoint(60, 0) : QPoint(0, 60));
+        QMouseEvent drag(QEvent::MouseMove, moved, bar.mapToGlobal(moved),
+                         Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&bar, &drag);
+        QVERIFY(bar.value() > pressedValue);
+        QTest::mouseRelease(&bar, Qt::LeftButton, Qt::NoModifier, moved);
+        QVERIFY(!bar.isSliderDown());
+        const int releasedValue = bar.value();
+        QTest::mouseMove(&bar, center);
+        QCOMPARE(bar.value(), releasedValue);
+    }
     void scrollbarAtRightEdge_data() {
         QTest::addColumn<double>("fraction");
         QTest::newRow("whole-pixel") << 0.0;
@@ -505,8 +540,13 @@ private slots:
         QVERIFY(scrollbar->value() < before);
         scrollbar->setValue(before);
         mouse(QEvent::MouseButtonPress, scrollbar->height() / 2);
-        mouse(QEvent::MouseButtonRelease, scrollbar->height() / 2);
+        QVERIFY(scrollbar->isSliderDown());
         QVERIFY(scrollbar->value() < before);
+        const int afterTrackClick = scrollbar->value();
+        mouse(QEvent::MouseMove, scrollbar->height() / 2 + 60);
+        QVERIFY(scrollbar->value() > afterTrackClick);
+        mouse(QEvent::MouseButtonRelease, scrollbar->height() / 2 + 60);
+        QVERIFY(!scrollbar->isSliderDown());
         scrollbar->setValue(0);
         QStyleOptionSlider option;
         option.initFrom(scrollbar);

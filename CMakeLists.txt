@@ -41,7 +41,7 @@ target_link_libraries(viewer_core PUBLIC Qt6::Widgets Qt6::Network pdfium_runtim
 target_link_libraries(viewer_core PRIVATE Qt6::CorePrivate)
 target_include_directories(viewer_core PUBLIC src)
 target_compile_definitions(viewer_core PUBLIC DOCUMENT_VIEWER_VERSION="${DOCUMENT_VIEWER_VERSION}")
-qt_add_executable(DocumentViewer WIN32 MACOSX_BUNDLE src/main.cpp)
+qt_add_executable(DocumentViewer WIN32 MACOSX_BUNDLE src/main.cpp src/viewerstyle.h)
 set_target_properties(DocumentViewer PROPERTIES MACOSX_BUNDLE_GUI_IDENTIFIER "org.documentviewer.app")
 qt_add_resources(DocumentViewer app_icon
     PREFIX "/icons"

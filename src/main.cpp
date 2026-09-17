@@ -1,5 +1,6 @@
 #include "window.h"
 #include "documentrequests.h"
+#include "viewerstyle.h"
 #include <QCryptographicHash>
 #include <QFileInfo>
 #include <QApplication>
@@ -66,7 +67,7 @@ int main(int argc, char **argv) {
         QMessageBox::critical(nullptr, "Document Viewer", "Could not start the document request service.");
         return 1;
     }
-    app.setStyle("Fusion");
+    app.setStyle(new ViewerStyle);
     app.setFont(QFont("Segoe UI", 10));
     FPDF_InitLibrary();
     int result;

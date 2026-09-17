@@ -55,8 +55,10 @@ saved; protected PDFs request their password again during restoration. Closing a
 tabs and exiting saves an empty session.
 
 Features: open dialog, drag and drop, password-protected documents, page navigation,
-fit width, fit page, editable zoom percentage, and keyboard shortcuts. Pages are
-rendered as visible 512-pixel tiles with a 64 MiB cache, including high-DPI support.
+fit width, fit page, editable zoom percentage, and keyboard shortcuts. Clicking the
+scrollbar track moves the slider to the pointer; keep the mouse button held to drag
+it. Pages are rendered as visible 512-pixel tiles with a 64 MiB cache, including
+high-DPI support.
 An unsuccessful open keeps the previous document available.
 
 ## Build and run on this machine
