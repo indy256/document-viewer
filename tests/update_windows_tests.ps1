@@ -25,6 +25,19 @@ function Wait-File([string]$path, [int]$seconds = 15) {
         Start-Sleep -Milliseconds 100
     }
 }
+function Get-TestFileHash([string]$path) {
+    # Windows PowerShell can inherit PowerShell 7's module search path in CI.
+    # Use .NET directly rather than depending on the Get-FileHash module.
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = [IO.File]::OpenRead($path)
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream))
+    } finally {
+        if ($stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
+}
 foreach ($scenario in @('install', 'rollback', 'invalid-target', 'cancel')) {
     $caseRoot = Join-Path $testRoot ("space ' dollar `$ " + $scenario)
     $staging = Join-Path $caseRoot '.dv-update-test'
@@ -35,11 +48,11 @@ foreach ($scenario in @('install', 'rollback', 'invalid-target', 'cancel')) {
     $null = $append.Seek(0, [IO.SeekOrigin]::End)
     $append.WriteByte(42)
     $append.Dispose()
-    $original = (Get-FileHash -LiteralPath $target).Hash
+    $original = Get-TestFileHash $target
     $replacement = Join-Path $staging 'replacement'
     if ($scenario -eq 'rollback') { [IO.File]::WriteAllText($replacement, 'not an executable') }
     else { Copy-Item -LiteralPath $fixture -Destination $replacement }
-    $expected = (Get-FileHash -LiteralPath $replacement).Hash
+    $expected = Get-TestFileHash $replacement
     $viewer = Start-Process -FilePath $fixture -ArgumentList '--wait' -WindowStyle Hidden -PassThru
     $launcher = Start-Process -FilePath $target -ArgumentList '--wait' -WindowStyle Hidden -PassThru
     $worker = $null
@@ -57,24 +70,24 @@ foreach ($scenario in @('install', 'rollback', 'invalid-target', 'cancel')) {
             if (!$worker.WaitForExit(10000) -or $worker.ExitCode -eq 0) { throw 'Invalid target was accepted' }
         } else {
             Wait-File (Join-Path $staging 'ready')
-            if ((Get-FileHash -LiteralPath $target).Hash -ne $original) { throw 'Target changed before commit' }
+            if ((Get-TestFileHash $target) -ne $original) { throw 'Target changed before commit' }
             if ($scenario -eq 'cancel') {
                 if (!$worker.WaitForExit(35000) -or $worker.ExitCode -eq 0) { throw 'Uncommitted update was not canceled' }
             } else {
                 [IO.File]::WriteAllText((Join-Path $staging 'commit'), 'install')
                 $viewer.Kill(); $viewer.WaitForExit()
                 Start-Sleep -Milliseconds 400
-                if ((Get-FileHash -LiteralPath $target).Hash -ne $original) { throw 'Did not wait for launcher exit' }
+                if ((Get-TestFileHash $target) -ne $original) { throw 'Did not wait for launcher exit' }
                 $launcher.Kill(); $launcher.WaitForExit()
                 if (!$worker.WaitForExit(15000)) { throw 'Installer timed out' }
                 if ($scenario -eq 'install') {
-                    if ($worker.ExitCode -ne 0 -or (Get-FileHash -LiteralPath $target).Hash -ne $expected) { throw 'Replacement failed' }
+                    if ($worker.ExitCode -ne 0 -or (Get-TestFileHash $target) -ne $expected) { throw 'Replacement failed' }
                     Wait-File (Join-Path $staging 'installed')
                 } elseif ($worker.ExitCode -eq 0) { throw 'Broken replacement reported success' }
                 Wait-File (Join-Path $caseRoot 'restarted')
             }
         }
-        if ($scenario -ne 'install' -and (Get-FileHash -LiteralPath $target).Hash -ne $original) {
+        if ($scenario -ne 'install' -and (Get-TestFileHash $target) -ne $original) {
             throw 'Original application was not preserved'
         }
         Write-Output "PASS: $scenario"
