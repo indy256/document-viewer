@@ -34,6 +34,9 @@ DWORD run(const fs::path &exe, const std::vector<std::wstring> &args, bool hidde
     if (!CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE,
                         hidden ? CREATE_NO_WINDOW : 0, nullptr, nullptr, &startup, &process))
         throw std::runtime_error("Could not start the packaged application or Windows tar.exe.");
+    // Pass file-open activation permission through to the application, which
+    // may in turn forward the request to an already running instance.
+    if (!hidden) AllowSetForegroundWindow(process.dwProcessId);
     CloseHandle(process.hThread);
     WaitForSingleObject(process.hProcess, INFINITE);
     DWORD code = 1;

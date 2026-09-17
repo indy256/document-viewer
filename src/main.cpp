@@ -72,10 +72,15 @@ int main(int argc, char **argv) {
     {
         Window window(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/session.json");
         QObject::connect(&requests, &DocumentRequests::received, &window, [&window](const QStringList &requested) {
-            for (const auto &path : requested) window.openDocument(path);
             if (window.isMinimized()) window.showNormal();
             window.raise();
             window.activateWindow();
+#ifdef Q_OS_WIN
+            // The forwarding process grants us foreground permission. Use it
+            // explicitly, even when Qt considers this application inactive.
+            SetForegroundWindow(reinterpret_cast<HWND>(window.winId()));
+#endif
+            for (const auto &path : requested) window.openDocument(path);
         }, Qt::QueuedConnection);
         QTimer::singleShot(0, &window, [&window, paths] {
             for (const auto &path : paths) window.openDocument(path);

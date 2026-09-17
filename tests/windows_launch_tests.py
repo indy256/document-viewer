@@ -20,6 +20,27 @@ for name in ['first.pdf', second_name]: pdf(work/name)
 u=ctypes.windll.user32
 cb=ctypes.WINFUNCTYPE(w.BOOL,w.HWND,w.LPARAM)
 u.PostMessageW.argtypes=[w.HWND,w.UINT,w.WPARAM,w.LPARAM]
+u.GetForegroundWindow.restype = w.HWND
+u.FindWindowW.argtypes = [w.LPCWSTR, w.LPCWSTR]
+u.FindWindowW.restype = w.HWND
+u.ShowWindow.argtypes = [w.HWND, ctypes.c_int]
+u.IsIconic.argtypes = [w.HWND]
+u.SetForegroundWindow.argtypes = [w.HWND]
+u.CreateWindowExW.argtypes = [w.DWORD, w.LPCWSTR, w.LPCWSTR, w.DWORD,
+                            ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                            w.HWND, w.HMENU, w.HINSTANCE, w.LPVOID]
+u.CreateWindowExW.restype = w.HWND
+u.DestroyWindow.argtypes = [w.HWND]
+u.PeekMessageW.argtypes = [ctypes.POINTER(w.MSG), w.HWND, w.UINT, w.UINT, w.UINT]
+u.TranslateMessage.argtypes = [ctypes.POINTER(w.MSG)]
+u.DispatchMessageW.argtypes = [ctypes.POINTER(w.MSG)]
+u.DispatchMessageW.restype = w.LPARAM
+
+def pump_messages():
+    message = w.MSG()
+    while u.PeekMessageW(ctypes.byref(message), None, 0, 0, 1):
+        u.TranslateMessage(ctypes.byref(message))
+        u.DispatchMessageW(ctypes.byref(message))
 def windows(close=False):
     found=[]
     @cb
@@ -35,6 +56,33 @@ session=Path(os.environ['LOCALAPPDATA'])/'Document Viewer'/'session.json'
 backup=session.read_bytes() if session.exists() else None
 assert not windows(),windows()
 processes = []
+cover = None
+
+def background_viewer(minimized=False):
+    hwnd = u.FindWindowW(None, windows()[0])
+    assert hwnd
+    if minimized:
+        u.ShowWindow(hwnd, 6) # SW_MINIMIZE
+        assert u.IsIconic(hwnd)
+    pump_messages()
+    # Simulate the user switching to the launching application. Windows grants
+    # foreground permission to the process that supplied the last input event.
+    u.keybd_event(0x12, 0, 0, 0) # VK_MENU (Alt)
+    try:
+        assert u.SetForegroundWindow(cover), "Could not foreground the test window"
+    finally:
+        u.keybd_event(0x12, 0, 2, 0) # KEYEVENTF_KEYUP
+    wait_for_foreground(cover)
+    return hwnd
+
+def wait_for_foreground(hwnd):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        pump_messages()
+        if u.GetForegroundWindow() == hwnd and not u.IsIconic(hwnd):
+            return
+        time.sleep(0.05)
+    raise AssertionError("File open did not restore and foreground the existing window")
 def wait_for_documents(expected):
     deadline = time.monotonic() + 20
     state = {}
@@ -47,6 +95,9 @@ def wait_for_documents(expected):
         time.sleep(0.1)
     raise AssertionError(f"Expected {expected}, saved state: {state}; windows: {windows()}")
 try:
+ cover = u.CreateWindowExW(0, 'STATIC', 'File-open foreground test', 0x90800000,
+                          100, 100, 400, 300, None, None, None, None)
+ assert cover, "Could not create the test window"
  for exe, sender in (itertools.permutations(executables, 2) if cross else ((exe, exe) for exe in executables)):
     print(f"Testing receiver: {exe}; sender: {sender}", flush=True)
     session.parent.mkdir(parents=True, exist_ok=True)
@@ -54,14 +105,18 @@ try:
     first=subprocess.Popen([str(exe),'first.pdf'],cwd=work)
     processes.append(first)
     wait_for_documents([work/'first.pdf'])
+    hwnd = background_viewer()
     second=subprocess.Popen([str(sender),second_name],cwd=work)
     processes.append(second)
     assert second.wait(20) == 0, f"Second launch failed: {windows()}"
+    wait_for_foreground(hwnd)
     state = wait_for_documents([work/'first.pdf', work/second_name])
     assert state['activeTab'] == 1, state
+    hwnd = background_viewer(minimized=True)
     duplicate=subprocess.Popen([str(sender),str(work/'first.pdf')],cwd=work.parent)
     processes.append(duplicate)
     assert duplicate.wait(20) == 0
+    wait_for_foreground(hwnd)
     deadline=time.monotonic()+15
     while time.monotonic() < deadline:
         state=json.loads(session.read_text(encoding="utf-8"))
@@ -70,8 +125,9 @@ try:
     assert len(state['documents']) == 2 and state['activeTab'] == 0, state
     windows(True)
     assert first.wait(10) == 0
-    print("PASS: repeated launches opened two tabs and reactivated the existing tab", flush=True)
+    print("PASS: repeated launches opened tabs and foregrounded background/minimized windows", flush=True)
 finally:
+ if cover: u.DestroyWindow(cover)
  windows(True)
  for process in processes:
   if process.poll() is None:
