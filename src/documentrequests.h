@@ -17,6 +17,8 @@ public:
     static bool send(const QString &name, const QStringList &paths);
 signals:
     void received(const QStringList &paths);
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 private:
 #ifdef Q_OS_WIN
     void *messageWindow = nullptr;

@@ -32,6 +32,12 @@ opening any files supplied on the command line. Checkpoints use atomic file
 replacement so an interrupted write preserves the previous saved session.
 After a crash, the latest completed checkpoint is restored.
 
+Right-click and choose **Register file types** to add this installation to **Open With**
+for PDF and EPUB files. Windows also lists it in **Default Apps** for the current user,
+without administrator access. Linux registers the executable or AppImage in your user
+applications; on macOS, run the installed `DocumentViewer.app`. Choose the default
+viewer through your system settings. Register again after moving the application.
+
 Right-click the document area and choose **Update to latest version** to download the matching package from
 the latest stable GitHub release. The updater checks the download size and SHA-256
 checksum, saves the reading session, replaces the application, and restarts it

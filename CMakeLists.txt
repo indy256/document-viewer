@@ -33,6 +33,12 @@ add_library(viewer_core
     src/window.cpp src/window.h
     src/updater.cpp src/updater.h
     src/documentrequests.cpp src/documentrequests.h)
+target_sources(viewer_core PRIVATE src/fileassociations.cpp src/fileassociations.h)
+if(WIN32)
+    target_link_libraries(viewer_core PRIVATE shell32)
+elseif(APPLE)
+    target_link_libraries(viewer_core PRIVATE "-framework CoreServices")
+endif()
 qt_add_resources(viewer_core updater_scripts
     PREFIX "/updates"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/packaging/updates"
@@ -52,6 +58,7 @@ if(WIN32)
     include(cmake/AppIcon.cmake)
     add_windows_app_icon(DocumentViewer)
 elseif(APPLE)
+    set_target_properties(DocumentViewer PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/Info.plist.in")
     set_source_files_properties(resources/icons/DocumentViewer.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     target_sources(DocumentViewer PRIVATE resources/icons/DocumentViewer.icns)
     set_target_properties(DocumentViewer PROPERTIES MACOSX_BUNDLE_ICON_FILE DocumentViewer.icns)
@@ -89,6 +96,10 @@ if(BUILD_TESTING)
     target_link_libraries(updater_tests PRIVATE viewer_core Qt6::Test)
     add_test(NAME updater_tests COMMAND updater_tests)
     if(WIN32)
+        qt_add_executable(fileassociations_tests tests/fileassociations_tests.cpp)
+        target_link_libraries(fileassociations_tests PRIVATE viewer_core Qt6::Test advapi32)
+        set_target_properties(fileassociations_tests PROPERTIES WIN32_EXECUTABLE FALSE)
+        add_test(NAME fileassociations_tests COMMAND fileassociations_tests)
         add_test(NAME update_installer_tests COMMAND powershell -NoProfile -ExecutionPolicy Bypass
             -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/update_windows_tests.ps1" -BuildDirectory "${CMAKE_BINARY_DIR}")
     elseif(UNIX)

@@ -1,6 +1,7 @@
 #include "window.h"
 #include "pdfview.h"
 #include "updater.h"
+#include "fileassociations.h"
 #include <QAction>
 #include <QApplication>
 #include <QMouseEvent>
@@ -74,9 +75,18 @@ Window::Window(const QString &sessionFile, int autosaveIntervalMs)
 
 void Window::contextMenuEvent(QContextMenuEvent *event) {
     QMenu menu(this);
+    auto registration = menu.addAction("Register file types");
     auto update = menu.addAction("Update to latest version");
     const auto selected = menu.exec(event->globalPos());
     event->accept();
+    if (selected == registration) {
+        const auto error = registerDocumentFileTypes();
+        if (!error.isEmpty()) QMessageBox::warning(this, "Register file types", error);
+        else QMessageBox::information(this, "Register file types",
+            "Document Viewer is now available in Open With for PDF and EPUB files.\n\n"
+            "Choose your default viewer in your system's Open With or Default Apps settings. "
+            "Register again if you move the application.");
+    }
     if (selected == update && Updater::installLatest(this, [this] { return saveSession(); })) close();
 }
 

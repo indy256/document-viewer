@@ -6,10 +6,21 @@
 #include <QTest>
 #include <QTimer>
 #include <QUuid>
+#include <QFileOpenEvent>
 
 class RequestTests : public QObject {
     Q_OBJECT
 private slots:
+    void fileOpenEvent() {
+        DocumentRequests requests;
+        QCoreApplication::instance()->installEventFilter(&requests);
+        QSignalSpy received(&requests, &DocumentRequests::received);
+        QFileOpenEvent event("/documents/book with spaces.epub");
+        QCoreApplication::sendEvent(QCoreApplication::instance(), &event);
+        QCOMPARE(received.count(), 1);
+        QCOMPARE(received.first().first().toStringList(), QStringList{"/documents/book with spaces.epub"});
+        QVERIFY(event.isAccepted());
+    }
 #ifndef Q_OS_WIN
     void partialRequest() {
         DocumentRequests requests;

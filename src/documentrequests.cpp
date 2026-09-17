@@ -7,10 +7,21 @@
 #endif
 #include <QThread>
 #include <QTimer>
+#include <QFileOpenEvent>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
+
+bool DocumentRequests::eventFilter(QObject *watched, QEvent *event) {
+    if (event->type() == QEvent::FileOpen) {
+        const auto file = static_cast<QFileOpenEvent *>(event)->file();
+        if (!file.isEmpty()) emit received({file});
+        event->accept();
+        return true;
+    }
+    return QObject::eventFilter(watched, event);
+}
 
 namespace {
 constexpr int maxRequestSize = 1024 * 1024;

@@ -63,6 +63,7 @@ int main(int argc, char **argv) {
     if (!instanceLock.tryLock()) return instanceLock.error() == QLockFile::LockFailedError ? forward() : 1;
 #endif
     DocumentRequests requests;
+    app.installEventFilter(&requests);
     if (!requests.listen(serverName)) {
         QMessageBox::critical(nullptr, "Document Viewer", "Could not start the document request service.");
         return 1;
