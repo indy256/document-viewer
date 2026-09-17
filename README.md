@@ -206,6 +206,14 @@ to a font file to override the platform default. On an already deployed Windows
 build, use the test preset or set `QT_QPA_PLATFORM_PLUGIN_PATH` to the Qt kit's
 `plugins/platforms` directory so the offscreen plugin can be found.
 
+On an interactive Windows desktop, run
+`py tests/windows_launch_tests.py build/DocumentViewer.exe`
+to check repeated file opens, tab selection, minimized
+window restoration, and foreground activation. Add a portable executable path
+to test that build as well. Hosted ARM64 CI uses `--no-foreground` because desktop
+focus is not reliably available there; all other launch checks still run.
+Windows x64 CI also checks foreground activation.
+
 Link-time optimization (LTO/IPO) is enabled by default for Release, RelWithDebInfo,
 and MinSizeRel builds, including the Windows portable launcher. CMake checks
 compiler/linker support at configure time; use `-DDOCUMENT_VIEWER_ENABLE_LTO=OFF`

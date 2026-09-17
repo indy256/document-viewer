@@ -142,7 +142,9 @@ jobs:
 
       - name: Test repeated Windows application launches
         if: runner.os == 'Windows'
-        run: python tests/windows_launch_tests.py stage/bin/DocumentViewer.exe dist/${{ matrix.package-name }}
+        # The hosted ARM64 runner cannot reliably grant interactive desktop focus.
+        # Keep file forwarding, tab selection, and minimized-window restoration checks.
+        run: python tests/windows_launch_tests.py ${{ matrix.msvc-arch == 'arm64' && '--no-foreground' || '' }} stage/bin/DocumentViewer.exe dist/${{ matrix.package-name }}
 
       - name: Test Linux AppImage
         if: runner.os == 'Linux'

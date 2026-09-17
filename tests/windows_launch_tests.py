@@ -1,9 +1,17 @@
 import itertools
+import argparse
 import ctypes, ctypes.wintypes as w, json, os, subprocess, sys, tempfile, time
 from pathlib import Path
-cross = "--cross" in sys.argv
+parser = argparse.ArgumentParser()
+parser.add_argument("--cross", action="store_true")
+parser.add_argument("--no-foreground", action="store_true",
+                    help="Skip desktop focus checks on noninteractive runners; still check window restoration")
+parser.add_argument("executables", nargs="+", type=Path)
+args = parser.parse_args()
+cross = args.cross
+check_foreground = not args.no_foreground
 sys.stdout.reconfigure(encoding="utf-8")
-executables = [Path(arg).resolve() for arg in sys.argv[1:] if arg != "--cross"]
+executables = [path.resolve() for path in args.executables]
 assert executables and all(path.is_file() for path in executables)
 fixtures = tempfile.TemporaryDirectory(prefix="dv-launch-tests-")
 work = Path(fixtures.name)
@@ -64,6 +72,8 @@ def background_viewer(minimized=False):
     if minimized:
         u.ShowWindow(hwnd, 6) # SW_MINIMIZE
         assert u.IsIconic(hwnd)
+    if not check_foreground:
+        return hwnd
     pump_messages()
     # Simulate the user switching to the launching application. Windows grants
     # foreground permission to the process that supplied the last input event.
@@ -79,10 +89,11 @@ def wait_for_foreground(hwnd):
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         pump_messages()
-        if u.GetForegroundWindow() == hwnd and not u.IsIconic(hwnd):
+        if not u.IsIconic(hwnd) and (not check_foreground or u.GetForegroundWindow() == hwnd):
             return
         time.sleep(0.05)
-    raise AssertionError("File open did not restore and foreground the existing window")
+    raise AssertionError("File open did not restore the existing window" +
+                         (" and bring it to the foreground" if check_foreground else ""))
 def wait_for_documents(expected):
     deadline = time.monotonic() + 20
     state = {}
@@ -95,9 +106,12 @@ def wait_for_documents(expected):
         time.sleep(0.1)
     raise AssertionError(f"Expected {expected}, saved state: {state}; windows: {windows()}")
 try:
- cover = u.CreateWindowExW(0, 'STATIC', 'File-open foreground test', 0x90800000,
+ if check_foreground:
+  cover = u.CreateWindowExW(0, 'STATIC', 'File-open foreground test', 0x90800000,
                           100, 100, 400, 300, None, None, None, None)
- assert cover, "Could not create the test window"
+  assert cover, "Could not create the test window"
+ else:
+  print("SKIP: desktop foreground checks (--no-foreground); window restoration is still checked", flush=True)
  for exe, sender in (itertools.permutations(executables, 2) if cross else ((exe, exe) for exe in executables)):
     print(f"Testing receiver: {exe}; sender: {sender}", flush=True)
     session.parent.mkdir(parents=True, exist_ok=True)
@@ -125,7 +139,8 @@ try:
     assert len(state['documents']) == 2 and state['activeTab'] == 0, state
     windows(True)
     assert first.wait(10) == 0
-    print("PASS: repeated launches opened tabs and foregrounded background/minimized windows", flush=True)
+    print("PASS: repeated launches opened tabs, selected existing tabs, and restored minimized windows" +
+          (" with foreground activation" if check_foreground else ""), flush=True)
 finally:
  if cover: u.DestroyWindow(cover)
  windows(True)
