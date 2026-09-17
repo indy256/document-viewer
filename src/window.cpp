@@ -62,7 +62,7 @@ Window::Window(const QString &sessionFile, int autosaveIntervalMs)
     addEmptyTab();
     enableControls(false);
     statusBar()->showMessage("Ready to read");
-    statusBar()->addPermanentWidget(new QLabel("Continuous scrolling   ·   Ctrl+wheel to zoom  "));
+    statusBar()->addPermanentWidget(new QLabel("Ctrl+wheel to zoom  "));
     applyStyle();
     if (!sessionPath.isEmpty()) {
         auto autosave = new QTimer(this);
