@@ -1,12 +1,16 @@
 #include "pdfview.h"
 #include "epub.h"
 #include <fpdf_text.h>
+#include <fpdf_doc.h>
 #include <QFile>
 #include <QFileInfo>
 #include <QApplication>
 #include <QPainter>
 #include <QScrollBar>
 #include <QWheelEvent>
+#include <QMouseEvent>
+#include <QDesktopServices>
+#include <QCursor>
 #include <algorithm>
 #include <cmath>
 
@@ -16,6 +20,7 @@ PdfView::PdfView(QWidget *parent) : QAbstractScrollArea(parent) {
     verticalScrollBar()->setSingleStep(60); // Three times Qt's default wheel scrolling distance.
     setFocusPolicy(Qt::StrongFocus);
     viewport()->setAutoFillBackground(false);
+    viewport()->setMouseTracking(true);
     connect(&searchTimer, &QTimer::timeout, this, &PdfView::searchPage);
 }
 
@@ -25,9 +30,10 @@ PdfView::~PdfView() {
 
 bool PdfView::open(const QString &path, const QString &password, QString *error) {
     QByteArray data;
+    EpubDestinations nextDestinations;
     if (QFileInfo(path).suffix().compare("epub", Qt::CaseInsensitive) == 0) {
         QApplication::setOverrideCursor(Qt::WaitCursor);
-        data = renderEpub(path, error);
+        data = renderEpub(path, error, &nextDestinations);
         QApplication::restoreOverrideCursor();
         if (data.isEmpty()) return false;
     } else {
@@ -68,6 +74,9 @@ bool PdfView::open(const QString &path, const QString &password, QString *error)
     document = next;
     bytes = std::move(data); // PDFium borrows this memory until the document closes.
     sizes = std::move(nextSizes);
+    epubDestinations = std::move(nextDestinations);
+    pressedLink = {};
+    viewport()->unsetCursor();
     search(QString());
     pages.clear();
     cache.clear();
@@ -100,6 +109,7 @@ void PdfView::layoutPages() {
     verticalScrollBar()->setPageStep(viewport()->height());
     horizontalScrollBar()->setRange(0, int(std::max(0.0, width - viewport()->width())));
     horizontalScrollBar()->setPageStep(viewport()->width());
+    updateLinkCursor();
     viewport()->update();
 }
 
@@ -231,7 +241,128 @@ void PdfView::wheelEvent(QWheelEvent *event) {
 
 void PdfView::scrollContentsBy(int, int) {
     viewport()->update();
+    updateLinkCursor();
     emit pageChanged(currentPage());
+}
+
+PdfView::LinkTarget PdfView::linkAt(const QPoint &position) const {
+    if (!document) return {};
+    const QPoint offset(horizontalScrollBar()->value(), verticalScrollBar()->value());
+    for (int i = 0; i < pages.size(); ++i) {
+        const QRect rect = pages[i].translated(-offset).toAlignedRect();
+        if (!rect.contains(position)) continue;
+        auto page = FPDF_LoadPage(document, i);
+        if (!page) return {};
+        double x = 0, y = 0;
+        FPDF_LINK link = nullptr;
+        if (FPDF_DeviceToPage(page, rect.x(), rect.y(), rect.width(), rect.height(), 0,
+                              position.x(), position.y(), &x, &y))
+            link = FPDFLink_GetLinkAtPoint(page, x, y);
+        LinkTarget result;
+        auto dest = link ? FPDFLink_GetDest(document, link) : nullptr;
+        auto action = link ? FPDFLink_GetAction(link) : nullptr;
+        if (!dest && action && FPDFAction_GetType(action) == PDFACTION_GOTO)
+            dest = FPDFAction_GetDest(document, action);
+        if (dest) {
+            result.page = FPDFDest_GetDestPageIndex(document, dest);
+            if (result.page < 0 || result.page >= pageCount()) result.page = -1;
+            FPDF_BOOL hasX = false, hasY = false, hasZoom = false;
+            float dx = 0, dy = 0, zoom = 0;
+            FPDFDest_GetLocationInPage(dest, &hasX, &hasY, &hasZoom, &dx, &dy, &zoom);
+            // FitH / FitV destinations also carry a position, but no XYZ tuple.
+            unsigned long count = 0;
+            FS_FLOAT params[4]{};
+            const auto mode = FPDFDest_GetView(dest, &count, params);
+            if (count && (mode == PDFDEST_VIEW_FITH || mode == PDFDEST_VIEW_FITBH)) { hasY = true; dy = params[0]; }
+            if (count && (mode == PDFDEST_VIEW_FITV || mode == PDFDEST_VIEW_FITBV)) { hasX = true; dx = params[0]; }
+            result.hasX = hasX && std::isfinite(dx);
+            result.hasY = hasY && std::isfinite(dy);
+            result.position = QPointF(dx, dy);
+            if (hasZoom && std::isfinite(zoom) && zoom > 0) result.zoom = zoom;
+        } else if (action && FPDFAction_GetType(action) == PDFACTION_URI) {
+            const auto length = FPDFAction_GetURIPath(document, action, nullptr, 0);
+            if (length > 1 && length <= 1024 * 1024) {
+                QByteArray uri(length, '\0');
+                FPDFAction_GetURIPath(document, action, uri.data(), length);
+                uri.chop(1);
+                const auto url = QUrl::fromEncoded(uri, QUrl::StrictMode);
+                if (url.isValid() && (epubDestinations.contains(url)
+                    || ((url.scheme() == "http" || url.scheme() == "https") && !url.host().isEmpty())
+                    || (url.scheme() == "mailto" && !url.path().isEmpty()))) result.url = url;
+            }
+        }
+        FPDF_ClosePage(page);
+        return result;
+    }
+    return {};
+}
+
+void PdfView::activateLink(const LinkTarget &target) {
+    if (!target.url.isEmpty()) {
+        const auto found = epubDestinations.constFind(target.url);
+        if (found != epubDestinations.cend()) {
+            const auto point = pages[found->page].topLeft() + found->position * scale;
+            horizontalScrollBar()->setValue(qRound(point.x() - 24));
+            verticalScrollBar()->setValue(qRound(point.y() - 24));
+        } else QDesktopServices::openUrl(target.url);
+        return;
+    }
+    if (target.page < 0 || target.page >= pages.size()) return;
+    if (target.zoom > 0) setZoom(target.zoom);
+    goToPage(target.page);
+    auto page = FPDF_LoadPage(document, target.page);
+    if (!page) return;
+    const auto rect = pages[target.page].toAlignedRect();
+    double x = 0, y = 0;
+    // Supply top-left defaults in PDF coordinates, including rotation/crop boxes.
+    FPDF_DeviceToPage(page, 0, 0, rect.width(), rect.height(), 0, 0, 0, &x, &y);
+    if (target.hasX) x = target.position.x();
+    if (target.hasY) y = target.position.y();
+    int px = 0, py = 0;
+    if (FPDF_PageToDevice(page, rect.x(), rect.y(), rect.width(), rect.height(), 0, x, y, &px, &py)) {
+        if (target.hasX || target.hasY) {
+            horizontalScrollBar()->setValue(px - 24);
+            verticalScrollBar()->setValue(py - 24);
+        }
+    }
+    FPDF_ClosePage(page);
+}
+
+void PdfView::updateLinkCursor() {
+    const auto point = viewport()->mapFromGlobal(QCursor::pos());
+    viewport()->setCursor(viewport()->rect().contains(point) && linkAt(point).valid()
+        ? Qt::PointingHandCursor : Qt::ArrowCursor);
+}
+
+void PdfView::mouseMoveEvent(QMouseEvent *event) {
+    if ((event->position().toPoint() - pressPosition).manhattanLength() > QApplication::startDragDistance())
+        pressedLink = {};
+    viewport()->setCursor(linkAt(event->position().toPoint()).valid() ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    QAbstractScrollArea::mouseMoveEvent(event);
+}
+
+void PdfView::mousePressEvent(QMouseEvent *event) {
+    pressedLink = {};
+    if (event->button() == Qt::LeftButton) {
+        pressPosition = event->position().toPoint();
+        pressedLink = linkAt(pressPosition);
+        if (pressedLink.valid()) { setFocus(Qt::MouseFocusReason); event->accept(); return; }
+    }
+    QAbstractScrollArea::mousePressEvent(event);
+}
+
+void PdfView::mouseReleaseEvent(QMouseEvent *event) {
+    const auto target = pressedLink;
+    pressedLink = {};
+    if (event->button() == Qt::LeftButton && target.valid()
+        && (event->position().toPoint() - pressPosition).manhattanLength() <= QApplication::startDragDistance()
+        && target == linkAt(event->position().toPoint())) {
+        activateLink(target);
+        updateLinkCursor();
+        event->accept();
+        return;
+    }
+    QAbstractScrollArea::mouseReleaseEvent(event);
 }
 
 void PdfView::paintEvent(QPaintEvent *) {

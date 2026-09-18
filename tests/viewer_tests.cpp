@@ -26,9 +26,19 @@
 #include <QWindow>
 #include <QStyle>
 #include <QStyleOptionSlider>
+#include <QDesktopServices>
+#include <fpdf_doc.h>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
+
+class UrlReceiver : public QObject {
+    Q_OBJECT
+public:
+    QUrl received;
+public slots:
+    void open(const QUrl &url) { received = url; }
+};
 
 class ViewerTests : public QObject {
     Q_OBJECT
@@ -51,6 +61,112 @@ private slots:
         QApplication::setFont(QFont(QFontDatabase::applicationFontFamilies(fontId).first(), 10));
     }
     void cleanupTestCase() { FPDF_DestroyLibrary(); }
+    void pdfLinks_data() {
+        QTest::addColumn<int>("rotation");
+        QTest::newRow("normal") << 0;
+        QTest::newRow("rotated") << 90;
+    }
+    void pdfLinks() {
+        QFETCH(int, rotation);
+        QTemporaryDir directory;
+        const auto path = directory.filePath("links.pdf");
+        QList<QByteArray> objects = {
+            "<< /Type /Catalog /Pages 2 0 R /Names << /Dests << /Names [(chapter) [5 0 R /XYZ 100 500 1.5]] >> >> >>",
+            "<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Rotate " + QByteArray::number(rotation)
+                + " /Annots [6 0 R 7 0 R 8 0 R 9 0 R] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] >>",
+            "<< /Type /Annot /Subtype /Link /Rect [50 700 200 740] /Dest [4 0 R /Fit] >>",
+            "<< /Type /Annot /Subtype /Link /Rect [50 600 200 640] /A << /S /GoTo /D (chapter) >> >>",
+            "<< /Type /Annot /Subtype /Link /Rect [50 500 200 540] /A << /S /URI /URI (https://example.com/read?q=1#part) >> >>",
+            "<< /Type /Annot /Subtype /Link /Rect [50 400 200 440] /A << /S /URI /URI (javascript:blocked) >> >>"
+        };
+        QByteArray pdf = "%PDF-1.7\n";
+        QList<int> offsets{0};
+        for (int i = 0; i < objects.size(); ++i) {
+            offsets.append(pdf.size());
+            pdf += QByteArray::number(i + 1) + " 0 obj\n" + objects[i] + "\nendobj\n";
+        }
+        const int xref = pdf.size();
+        pdf += "xref\n0 " + QByteArray::number(offsets.size()) + "\n0000000000 65535 f \n";
+        for (int i = 1; i < offsets.size(); ++i)
+            pdf += QByteArray::number(offsets[i]).rightJustified(10, '0') + " 00000 n \n";
+        pdf += "trailer\n<< /Size " + QByteArray::number(offsets.size()) + " /Root 1 0 R >>\nstartxref\n"
+            + QByteArray::number(xref) + "\n%%EOF\n";
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(pdf);
+        file.close();
+        PdfView view;
+        view.resize(640, 500);
+        view.show();
+        QString error;
+        QVERIFY2(view.open(path, {}, &error), qPrintable(error));
+        view.setZoom(1.2);
+        auto point = [&](double y) {
+            auto doc = FPDF_LoadMemDocument64(pdf.constData(), pdf.size(), nullptr);
+            auto page = FPDF_LoadPage(doc, 0);
+            const int width = qCeil(FPDF_GetPageWidthF(page) * view.zoom());
+            const int height = qCeil(FPDF_GetPageHeightF(page) * view.zoom());
+            int x = 0, py = 0;
+            FPDF_PageToDevice(page, 24, 24, width, height, 0, 120, y, &x, &py);
+            FPDF_ClosePage(page);
+            FPDF_CloseDocument(doc);
+            view.horizontalScrollBar()->setValue(std::max(0, x - 200));
+            view.verticalScrollBar()->setValue(std::max(0, py - 200));
+            return QPoint(x - view.horizontalScrollBar()->value(), py - view.verticalScrollBar()->value());
+        };
+        auto first = point(720);
+        QTest::mouseMove(view.viewport(), first);
+        QCOMPARE(view.viewport()->cursor().shape(), Qt::PointingHandCursor);
+        const auto before = view.verticalScrollBar()->value();
+        QTest::mouseClick(view.viewport(), Qt::RightButton, Qt::NoModifier, first);
+        QCOMPARE(view.verticalScrollBar()->value(), before);
+        QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, first);
+        QTest::mouseMove(view.viewport(), first + QPoint(30, 0));
+        QTest::mouseRelease(view.viewport(), Qt::LeftButton, Qt::NoModifier, first + QPoint(30, 0));
+        QCOMPARE(view.verticalScrollBar()->value(), before);
+        QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, first);
+        QCOMPARE(view.currentPage(), 1);
+        QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, point(620));
+        QCOMPARE(view.currentPage(), 2);
+        QCOMPARE(view.zoom(), 1.5);
+        view.setZoom(1.2);
+        UrlReceiver receiver;
+        QDesktopServices::setUrlHandler("https", &receiver, "open");
+        QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, point(520));
+        QDesktopServices::unsetUrlHandler("https");
+        QCOMPARE(receiver.received, QUrl("https://example.com/read?q=1#part"));
+        QTest::mouseMove(view.viewport(), point(420));
+        QCOMPARE(view.viewport()->cursor().shape(), Qt::ArrowCursor);
+    }
+    void epubLinks() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("links.epub");
+        makeBook(path, false, "3.0");
+        PdfView view;
+        view.resize(700, 600);
+        view.show();
+        QString error;
+        QVERIFY2(view.open(path, {}, &error), qPrintable(error));
+        // Search centers the link text, letting clicks exercise the rendered annotation.
+        view.search("Next chapter");
+        QTRY_VERIFY(!view.isSearching());
+        QCOMPARE(view.matchCount(), 1);
+        bool clicked = false;
+        for (int y = 0; y < view.viewport()->height() && !clicked; y += 2) {
+            for (int x = 0; x < view.viewport()->width() && !clicked; x += 4) {
+                QTest::mouseMove(view.viewport(), QPoint(x, y), 0);
+                if (view.viewport()->cursor().shape() == Qt::PointingHandCursor) {
+                    QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(x, y));
+                    clicked = true;
+                }
+            }
+        }
+        QVERIFY(clicked);
+        QCOMPARE(view.currentPage(), 1);
+    }
     void epubReading() {
         QTemporaryDir directory;
         const auto epubPath = directory.filePath(QString::fromUtf8("book-é.epub"));

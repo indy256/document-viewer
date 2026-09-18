@@ -6,6 +6,7 @@
 #include <QVector>
 #include <QTimer>
 #include <fpdfview.h>
+#include "epub.h"
 
 class PdfView : public QAbstractScrollArea {
     Q_OBJECT
@@ -35,12 +36,34 @@ protected:
     void paintEvent(QPaintEvent *) override;
     void resizeEvent(QResizeEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void scrollContentsBy(int, int) override;
 private:
     void layoutPages();
     void applyFit();
     void searchPage();
     void revealMatch();
+    struct LinkTarget {
+        int page = -1;
+        QPointF position;
+        bool hasX = false;
+        bool hasY = false;
+        double zoom = 0;
+        QUrl url;
+        bool valid() const { return page >= 0 || !url.isEmpty(); }
+        bool operator==(const LinkTarget &other) const {
+            return page == other.page && position == other.position && hasX == other.hasX
+                && hasY == other.hasY && zoom == other.zoom && url == other.url;
+        }
+    };
+    LinkTarget linkAt(const QPoint &position) const;
+    void activateLink(const LinkTarget &target);
+    void updateLinkCursor();
+    LinkTarget pressedLink;
+    QPoint pressPosition;
+    EpubDestinations epubDestinations;
     struct Match { int page; QVector<QRectF> rectangles; }; // Normalized display coordinates.
     QVector<Match> matches;
     QString query;

@@ -67,6 +67,11 @@ it. Pages are rendered as visible 512-pixel tiles with a 64 MiB cache, including
 high-DPI support.
 An unsuccessful open keeps the previous document available.
 
+Click a document link to jump to its PDF destination or EPUB chapter/anchor.
+Web and email links open in the system's default browser or mail application.
+Supported links show a hand cursor; dragging across a link does not activate it.
+PDF launch actions, links to other local files, and script links are not executed.
+
 ## Build and run on this machine
 
 Uses the installed Qt 6.11.2 MinGW kit, MinGW 13.1, CMake, and Ninja under `C:\Qt`.
@@ -118,7 +123,7 @@ both Windows x64 and ARM64. Linux and macOS continue to use prebuilt Qt kits.
 | Zoom shortcuts | Ctrl+−, Ctrl++, Ctrl+= |
 | Fit width | Toolbar button or Ctrl+0 |
 | Fit page | Zoom dropdown |
-| Navigate | Page number, arrow buttons, Alt+Left / Alt+Right |
+| Navigate | Page number, arrow buttons, Alt+Left / Alt+Right, or document links |
 | Switch tabs | Click a tab, Ctrl+Tab, or Ctrl+Shift+Tab |
 | Close tab | Tab close button or Ctrl+W |
 | Exit and save session | Escape |
@@ -160,7 +165,7 @@ the existing viewer. Continuous scrolling, zoom, substring search, mixed PDF/EPU
 tabs, and session recovery work for books too. The original EPUB is unchanged.
 
 This is a basic paginated EPUB reader: complex CSS, fixed-layout fidelity, inline
-SVG, embedded fonts, scripts, multimedia, and interactive book navigation are not
+SVG, embedded fonts, scripts, multimedia, and advanced interactive content are not
 fully supported. Fonts use installed fallbacks. DRM-encrypted books are rejected.
 Opening a large book can take a moment while pages are laid out; zoom scales these
 pages rather than reflowing the book. External network/file resources are not loaded.
@@ -179,6 +184,8 @@ Session tests cover periodic checkpoints without a close event, immediate saves
 on close, restored tab state, missing documents, empty sessions, and corrupt JSON.
 EPUB tests cover versions 2 and 3, spine order, relative image/CSS resources,
 substring search, zoom/session recovery, and missing-chapter error recovery.
+Link tests cover internal and named PDF destinations, destination zoom, rotated
+pages, web links, drag cancellation, and EPUB chapter anchors.
 
 ## GitHub Actions
 

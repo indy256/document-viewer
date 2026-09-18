@@ -11,6 +11,7 @@
 #include <QTextCursor>
 #include <QTextFragment>
 #include <QTextImageFormat>
+#include <QTextLayout>
 #include <QUrl>
 #include <QXmlStreamReader>
 #include <algorithm>
@@ -50,7 +51,8 @@ private:
 };
 }
 
-QByteArray renderEpub(const QString &path, QString *error) {
+QByteArray renderEpub(const QString &path, QString *error, EpubDestinations *destinations) {
+    EpubDestinations targets;
     auto fail = [error](const QString &message) { *error = message; return QByteArray(); };
     QZipReader archive(path);
     if (!archive.isReadable()) return fail("Could not read the EPUB archive.");
@@ -123,6 +125,7 @@ QByteArray renderEpub(const QString &path, QString *error) {
         QPainter painter(&writer);
         if (!painter.isActive()) return fail("Could not prepare the EPUB pages.");
         bool firstPage = true;
+        int pageOffset = 0;
         for (const auto &id : spine) {
             const auto item = manifest.value(id);
             if (item.path.isEmpty()) return fail("The EPUB reading order references a missing item.");
@@ -158,6 +161,14 @@ QByteArray renderEpub(const QString &path, QString *error) {
             for (auto block = document.begin(); block.isValid(); block = block.next()) {
                 for (auto it = block.begin(); !it.atEnd(); ++it) {
                     const auto fragment = it.fragment();
+                    auto charFormat = fragment.charFormat();
+                    if (!charFormat.anchorHref().isEmpty()) {
+                        charFormat.setAnchorHref(archiveUrl(item.path).resolved(QUrl(charFormat.anchorHref())).toString(QUrl::FullyEncoded));
+                        QTextCursor cursor(&document);
+                        cursor.setPosition(fragment.position());
+                        cursor.setPosition(fragment.position() + fragment.length(), QTextCursor::KeepAnchor);
+                        cursor.setCharFormat(charFormat);
+                    }
                     if (!fragment.charFormat().isImageFormat()) continue;
                     auto format = fragment.charFormat().toImageFormat();
                     const auto image = qvariant_cast<QImage>(document.resource(QTextDocument::ImageResource, QUrl(format.name())));
@@ -177,6 +188,26 @@ QByteArray renderEpub(const QString &path, QString *error) {
             }
             document.setPageSize(QSizeF(writer.width(), writer.height()));
             const int pages = document.pageCount();
+            const auto margin = writer.pageLayout().margins(QPageLayout::Point);
+            targets.insert(archiveUrl(item.path), {pageOffset, QPointF(margin.left(), margin.top())});
+            for (auto block = document.begin(); block.isValid(); block = block.next()) {
+                for (auto it = block.begin(); !it.atEnd(); ++it) {
+                    const auto fragment = it.fragment();
+                    const auto names = fragment.charFormat().anchorNames();
+                    if (names.isEmpty()) continue;
+                    const auto layout = block.layout();
+                    const auto line = layout->lineForTextPosition(fragment.position() - block.position());
+                    const QPointF point = layout->position() + (line.isValid()
+                        ? QPointF(line.cursorToX(fragment.position() - block.position()), line.y()) : QPointF());
+                    const int localPage = std::clamp(int(point.y() / writer.height()), 0, pages - 1);
+                    for (const auto &name : names) {
+                        auto url = archiveUrl(item.path);
+                        url.setFragment(name);
+                        targets.insert(url, {pageOffset + localPage,
+                            QPointF(margin.left() + point.x(), margin.top() + point.y() - localPage * writer.height())});
+                    }
+                }
+            }
             for (int page = 0; page < pages; ++page) {
                 if (!firstPage && !writer.newPage()) return fail("Could not lay out the EPUB pages.");
                 firstPage = false;
@@ -186,7 +217,9 @@ QByteArray renderEpub(const QString &path, QString *error) {
                 document.drawContents(&painter, QRectF(0, page * writer.height(), writer.width(), writer.height()));
                 painter.restore();
             }
+            pageOffset += pages;
         }
     }
+    if (destinations) *destinations = std::move(targets);
     return output;
 }
