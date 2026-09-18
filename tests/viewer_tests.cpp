@@ -26,6 +26,9 @@
 #include <QWindow>
 #include <QStyle>
 #include <QStyleOptionSlider>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 class ViewerTests : public QObject {
     Q_OBJECT
@@ -501,8 +504,62 @@ private slots:
     void scrollbarAtRightEdge_data() {
         QTest::addColumn<double>("fraction");
         QTest::newRow("whole-pixel") << 0.0;
+        QTest::newRow("125-percent") << 0.2;
+        QTest::newRow("150-percent") << 1.0 / 3.0;
+        QTest::newRow("175-percent") << 3.0 / 7.0;
         QTest::newRow("200-percent") << 0.5;
         QTest::newRow("400-percent") << 0.75;
+    }
+    void nativeScrollbarAtScreenEdge() {
+#ifdef Q_OS_WIN
+        if (QGuiApplication::platformName() != "windows")
+            QSKIP("Requires the Windows platform plugin");
+        QTemporaryDir directory;
+        const auto path = directory.filePath("native-edge.pdf");
+        {
+            QPdfWriter writer(path);
+            QPainter painter(&writer);
+            painter.drawText(50, 100, "First page");
+            writer.newPage();
+            painter.drawText(50, 100, "Second page");
+        }
+        Window window;
+        window.showMaximized();
+        QVERIFY(window.openDocument(path));
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto scrollbar = window.findChild<PdfView *>()->verticalScrollBar();
+        const auto hwnd = reinterpret_cast<HWND>(window.winId());
+        MONITORINFO monitor{sizeof(MONITORINFO)};
+        QVERIFY(GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &monitor));
+        RECT client;
+        QVERIFY(GetClientRect(hwnd, &client));
+        POINT edge{monitor.rcMonitor.right - 1, (monitor.rcWork.top + monitor.rcWork.bottom) / 2};
+        POINT local = edge;
+        QVERIFY(ScreenToClient(hwnd, &local));
+        if (local.x != client.right - 1)
+            QSKIP("The monitor's right edge is outside the maximized client area");
+        scrollbar->setValue(0);
+        SendMessageW(hwnd, WM_MOUSEWHEEL, MAKEWPARAM(0, WORD(-WHEEL_DELTA)), MAKELPARAM(edge.x, edge.y));
+        QCoreApplication::processEvents();
+        const bool wheelScrolled = scrollbar->value() > 0;
+        scrollbar->setValue(0);
+        SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(local.x, local.y));
+        QCoreApplication::processEvents();
+        const bool sliderDown = scrollbar->isSliderDown();
+        const int afterClick = scrollbar->value();
+        SendMessageW(hwnd, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(local.x, local.y + 100));
+        QCoreApplication::processEvents();
+        const int afterDrag = scrollbar->value();
+        SendMessageW(hwnd, WM_LBUTTONUP, 0, MAKELPARAM(local.x, local.y + 100));
+        QCoreApplication::processEvents();
+        QVERIFY(wheelScrolled);
+        QVERIFY(sliderDown);
+        QVERIFY(afterClick > 0);
+        QVERIFY(afterDrag > afterClick);
+        QVERIFY(!scrollbar->isSliderDown());
+#else
+        QSKIP("Requires Windows");
+#endif
     }
     void scrollbarAtRightEdge() {
         QFETCH(double, fraction);
@@ -522,6 +579,20 @@ private slots:
         auto view = window.findChild<PdfView *>();
         auto scrollbar = view->verticalScrollBar();
         QVERIFY(scrollbar->maximum() > 0);
+        const QPointF wheelPosition(window.width() - 1 + fraction,
+            scrollbar->mapTo(&window, scrollbar->rect().center()).y());
+        auto wheel = [&](int delta) {
+            QWheelEvent event(wheelPosition, window.mapToGlobal(wheelPosition), {},
+                              QPoint(0, delta), Qt::NoButton, Qt::NoModifier,
+                              Qt::NoScrollPhase, false);
+            QCoreApplication::sendEvent(window.windowHandle(), &event);
+        };
+        scrollbar->setValue(0);
+        wheel(-120);
+        QVERIFY(scrollbar->value() > 0);
+        const int afterWheelDown = scrollbar->value();
+        wheel(120);
+        QVERIFY(scrollbar->value() < afterWheelDown);
         auto mouse = [&](QEvent::Type type, int y) {
             // Send fractional coordinates through the window, so Qt must pick
             // the target widget just as it does for native high-DPI input.

@@ -5,6 +5,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QMouseEvent>
+#include <QWheelEvent>
 #include <QShowEvent>
 #include <QWindow>
 #include <QComboBox>
@@ -98,19 +99,33 @@ void Window::showEvent(QShowEvent *event) {
 bool Window::eventFilter(QObject *watched, QEvent *event) {
     if (watched == windowHandle() && view &&
         (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease ||
-         event->type() == QEvent::MouseButtonDblClick || event->type() == QEvent::MouseMove)) {
-        auto mouse = static_cast<QMouseEvent *>(event);
-        const auto position = mouse->position();
+         event->type() == QEvent::MouseButtonDblClick || event->type() == QEvent::MouseMove ||
+         event->type() == QEvent::Wheel)) {
+        auto input = static_cast<QSinglePointEvent *>(event);
+        const auto position = input->position();
         auto scrollbar = view->verticalScrollBar();
         const QRect barRect(scrollbar->mapTo(this, QPoint()), scrollbar->size());
-        // At high DPI the last physical pixel can round past the widget's
-        // right edge. Correct it before Qt picks the mouse target, preserving
-        // normal scrollbar clicks, implicit mouse grabs, and dragging.
+        // At fractional DPI the last physical pixel can lie beyond the last
+        // integer widget coordinate, even at 125% scaling. Correct the entire
+        // fractional strip before Qt picks the input target, preserving
+        // normal wheel scrolling, scrollbar clicks, mouse grabs, and dragging.
         if (scrollbar->isVisible() && barRect.right() == width() - 1 &&
-            position.x() >= width() - 0.5 && position.x() < width() &&
+            position.x() > width() - 1 && position.x() < width() &&
             position.y() >= barRect.top() && position.y() < barRect.bottom() + 1) {
             const QPointF adjusted(width() - 1, position.y());
             const QPointF delta = adjusted - position;
+            if (event->type() == QEvent::Wheel) {
+                auto wheel = static_cast<QWheelEvent *>(event);
+                QWheelEvent corrected(adjusted, wheel->globalPosition() + delta,
+                    wheel->pixelDelta(), wheel->angleDelta(), wheel->buttons(),
+                    wheel->modifiers(), wheel->phase(), wheel->inverted(),
+                    wheel->source(), wheel->pointingDevice());
+                corrected.setTimestamp(wheel->timestamp());
+                QCoreApplication::sendEvent(watched, &corrected);
+                event->setAccepted(corrected.isAccepted());
+                return true;
+            }
+            auto mouse = static_cast<QMouseEvent *>(event);
             QMouseEvent corrected(mouse->type(), adjusted, mouse->scenePosition() + delta,
                 mouse->globalPosition() + delta, mouse->button(), mouse->buttons(),
                 mouse->modifiers(), mouse->source(), mouse->pointingDevice());
