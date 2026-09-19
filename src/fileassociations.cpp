@@ -27,9 +27,9 @@ QString registerDocumentFileTypes() {
     QSettings registry("HKEY_CURRENT_USER\\Software", QSettings::NativeFormat);
     const QString capabilities = "DocumentViewer/Capabilities/";
     registry.setValue(capabilities + "ApplicationName", "Document Viewer");
-    registry.setValue(capabilities + "ApplicationDescription", "Read PDF and EPUB documents.");
+    registry.setValue(capabilities + "ApplicationDescription", "Read PDF, EPUB, and DjVu documents.");
     registry.setValue(capabilities + "ApplicationIcon", icon);
-    for (const auto &extension : {QString("pdf"), QString("epub")}) {
+    for (const auto &extension : {QString("pdf"), QString("epub"), QString("djvu"), QString("djv")}) {
         const QString id = "DocumentViewer." + extension;
         const QString type = "Classes/" + id + '/';
         registry.setValue(type + "Default", "Document Viewer " + extension.toUpper() + " document");
@@ -76,7 +76,7 @@ QString registerDocumentFileTypes() {
         return "Could not save the Document Viewer icon.";
     const auto contents = QString("[Desktop Entry]\nType=Application\nName=Document Viewer\n"
         "Exec=\"%1\" %F\nIcon=DocumentViewer\nCategories=Office;Viewer;\n"
-        "MimeType=application/pdf;application/epub+zip;\nTerminal=false\n").arg(quoted).toUtf8();
+        "MimeType=application/pdf;application/epub+zip;image/vnd.djvu;image/x-djvu;\nTerminal=false\n").arg(quoted).toUtf8();
     QSaveFile entry(applications + "/DocumentViewer.desktop");
     if (!entry.open(QIODevice::WriteOnly) || entry.write(contents) != contents.size() || !entry.commit())
         return "Could not save the application desktop entry: " + entry.errorString();

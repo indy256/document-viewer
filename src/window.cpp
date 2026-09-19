@@ -84,7 +84,7 @@ void Window::contextMenuEvent(QContextMenuEvent *event) {
         const auto error = registerDocumentFileTypes();
         if (!error.isEmpty()) QMessageBox::warning(this, "Register file types", error);
         else QMessageBox::information(this, "Register file types",
-            "Document Viewer is now available in Open With for PDF and EPUB files.\n\n"
+            "Document Viewer is now available in Open With for PDF, EPUB, and DjVu files.\n\n"
             "Choose your default viewer in your system's Open With or Default Apps settings. "
             "Register again if you move the application.");
     }
@@ -164,7 +164,7 @@ void Window::setupToolbars() {
     openAction->setShortcut(QKeySequence::Open);
     connect(openAction, &QAction::triggered, this, [this] {
         const auto paths = QFileDialog::getOpenFileNames(this, "Open documents", lastDirectory,
-            "Documents (*.pdf *.epub);;PDF documents (*.pdf);;EPUB books (*.epub)");
+            "Documents (*.pdf *.epub *.djvu *.djv);;PDF documents (*.pdf);;EPUB books (*.epub);;DjVu documents (*.djvu *.djv)");
         for (const auto &path : paths) openDocument(path);
     });
     toolbar->addSeparator();

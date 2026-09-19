@@ -4,5 +4,5 @@ Name=Document Viewer
 Exec=DocumentViewer %F
 Icon=DocumentViewer
 Categories=Office;Viewer;
-MimeType=application/pdf;application/epub+zip;
+MimeType=application/pdf;application/epub+zip;image/vnd.djvu;image/x-djvu;
 Terminal=false

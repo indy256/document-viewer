@@ -7,6 +7,7 @@
 #include <QTimer>
 #include <fpdfview.h>
 #include "epub.h"
+#include "djvu.h"
 
 class PdfView : public QAbstractScrollArea {
     Q_OBJECT
@@ -86,6 +87,7 @@ private:
     int selectedMatch = -1;
     int nextSearchPage = 0;
     QTimer searchTimer;
+    std::unique_ptr<DjvuDocument> djvu;
     FPDF_DOCUMENT document = nullptr;
     QByteArray bytes;
     QVector<QSizeF> sizes;

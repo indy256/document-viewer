@@ -40,11 +40,13 @@ private slots:
         QSettings registry("HKEY_CURRENT_USER\\Software", QSettings::NativeFormat);
         registry.setValue("Classes/.pdf/Default", "Existing.PDF");
         registry.setValue("Classes/.epub/Default", "Existing.EPUB");
+        registry.setValue("Classes/.djvu/Default", "Existing.DJVU");
+        registry.setValue("Classes/.djv/Default", "Existing.DJV");
         registry.sync();
         QCOMPARE(registerDocumentFileTypes(), QString());
         QCOMPARE(registerDocumentFileTypes(), QString()); // Re-registration is safe.
         registry.sync();
-        for (const auto &extension : {QString("pdf"), QString("epub")}) {
+        for (const auto &extension : {QString("pdf"), QString("epub"), QString("djvu"), QString("djv")}) {
             const auto id = "DocumentViewer." + extension;
             QCOMPARE(registry.value("Classes/" + id + "/shell/open/command/Default").toString(),
                 '"' + QDir::toNativeSeparators(portable) + "\" \"%1\"");

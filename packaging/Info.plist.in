@@ -24,6 +24,13 @@
             <key>LSItemContentTypes</key><array><string>org.idpf.epub-container</string></array>
             <key>CFBundleTypeExtensions</key><array><string>epub</string></array>
         </dict>
+        <dict>
+            <key>CFBundleTypeName</key><string>DjVu document</string>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key><array><string>org.djvu.djvu</string></array>
+            <key>CFBundleTypeExtensions</key><array><string>djvu</string><string>djv</string></array>
+        </dict>
     </array>
     <key>UTImportedTypeDeclarations</key>
     <array><dict>
@@ -33,6 +40,14 @@
         <key>UTTypeTagSpecification</key><dict>
             <key>public.filename-extension</key><array><string>epub</string></array>
             <key>public.mime-type</key><string>application/epub+zip</string>
+        </dict>
+    </dict><dict>
+        <key>UTTypeIdentifier</key><string>org.djvu.djvu</string>
+        <key>UTTypeDescription</key><string>DjVu document</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+        <key>UTTypeTagSpecification</key><dict>
+            <key>public.filename-extension</key><array><string>djvu</string><string>djv</string></array>
+            <key>public.mime-type</key><array><string>image/vnd.djvu</string><string>image/x-djvu</string></array>
         </dict>
     </dict></array>
 </dict>

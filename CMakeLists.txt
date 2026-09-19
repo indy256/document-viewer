@@ -20,6 +20,7 @@ include(cmake/EnableLto.cmake)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets CorePrivate Network)
 qt_standard_project_setup()
 include(cmake/Pdfium.cmake)
+include(cmake/DjVuLibre.cmake)
 if(MSVC)
     add_compile_options(/utf-8)
 endif()
@@ -30,6 +31,7 @@ endif()
 add_library(viewer_core
     src/pdfview.cpp src/pdfview.h
     src/epub.cpp src/epub.h
+    src/djvu.cpp src/djvu.h
     src/window.cpp src/window.h
     src/updater.cpp src/updater.h
     src/documentrequests.cpp src/documentrequests.h)
@@ -44,7 +46,7 @@ qt_add_resources(viewer_core updater_scripts
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/packaging/updates"
     FILES packaging/updates/install.ps1 packaging/updates/install.sh)
 target_link_libraries(viewer_core PUBLIC Qt6::Widgets Qt6::Network pdfium_runtime)
-target_link_libraries(viewer_core PRIVATE Qt6::CorePrivate)
+target_link_libraries(viewer_core PRIVATE Qt6::CorePrivate djvu_decoder)
 target_include_directories(viewer_core PUBLIC src)
 target_compile_definitions(viewer_core PUBLIC DOCUMENT_VIEWER_VERSION="${DOCUMENT_VIEWER_VERSION}")
 qt_add_executable(DocumentViewer WIN32 MACOSX_BUNDLE src/main.cpp src/viewerstyle.h)
@@ -80,7 +82,13 @@ qt_generate_deploy_app_script(TARGET DocumentViewer OUTPUT_SCRIPT deploy_script 
 install(SCRIPT ${deploy_script})
 install(FILES "${pdfium_SOURCE_DIR}/LICENSE" DESTINATION licenses RENAME PDFium-LICENSE.txt)
 install(DIRECTORY "${pdfium_SOURCE_DIR}/licenses/" DESTINATION licenses/pdfium)
-install(FILES README.md LICENSE DESTINATION .)
+install(FILES README.md LICENSE THIRD_PARTY.md DESTINATION .)
+install(FILES CMakeLists.txt CMakePresets.json README.md LICENSE THIRD_PARTY.md
+    DESTINATION sources/document-viewer)
+install(DIRECTORY src cmake tests resources packaging scripts DESTINATION sources/document-viewer
+    PATTERN "__pycache__" EXCLUDE)
+file(GLOB viewer_build_scripts "${CMAKE_CURRENT_SOURCE_DIR}/*.ps1" "${CMAKE_CURRENT_SOURCE_DIR}/*.cmd")
+install(FILES ${viewer_build_scripts} DESTINATION sources/document-viewer)
 
 include(CTest)
 if(BUILD_TESTING)
@@ -89,6 +97,12 @@ if(BUILD_TESTING)
     target_link_libraries(viewer_tests PRIVATE viewer_core Qt6::Test Qt6::CorePrivate)
     copy_pdfium_runtime(viewer_tests)
     add_test(NAME viewer_tests COMMAND viewer_tests -platform offscreen)
+    qt_add_executable(djvu_tests tests/djvu_tests.cpp)
+    target_link_libraries(djvu_tests PRIVATE viewer_core Qt6::Test djvu_decoder)
+    target_compile_definitions(djvu_tests PRIVATE HAVE_NAMESPACES=1)
+    set_target_properties(djvu_tests PROPERTIES WIN32_EXECUTABLE FALSE)
+    copy_pdfium_runtime(djvu_tests)
+    add_test(NAME djvu_tests COMMAND djvu_tests -platform offscreen)
     qt_add_executable(request_tests tests/request_tests.cpp)
     target_link_libraries(request_tests PRIVATE viewer_core Qt6::Test)
     add_test(NAME request_tests COMMAND request_tests -o -,txt -o "${CMAKE_BINARY_DIR}/Testing/Temporary/request-tests.txt,txt")

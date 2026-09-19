@@ -1,6 +1,6 @@
 # Document Viewer
 
-A native C++ / Qt Widgets PDF and EPUB reader with multiple document tabs, continuous
+A native C++ / Qt Widgets PDF, EPUB, and DjVu reader with multiple document tabs, continuous
 vertical scrolling, and zoom from 10% to 500%.
 
 The window title shows the release tag, for example `Document Viewer v1.0.2`.
@@ -8,8 +8,10 @@ Builds between releases also show the commit distance and hash; builds without G
 tags show `dev`. Set `-DDOCUMENT_VIEWER_VERSION=v1.0.2` when building from a source
 archive to supply the version explicitly.
 
-Licensed under the [MIT License](LICENSE). Qt, PDFium, and other bundled
-third-party components retain their respective licenses.
+Viewer source is licensed under the [MIT License](LICENSE). Qt, PDFium, and other
+bundled third-party components retain their respective licenses. The DjVu-enabled
+application includes GPL-2.0-or-later DjVuLibre; distribution of the combined
+application must comply with that license. See [third-party notices](THIRD_PARTY.md).
 
 Only one instance runs per Windows login session (per user on Linux/macOS). A
 second launch forwards its file paths to the running window, then exits. For example,
@@ -19,7 +21,7 @@ paths containing spaces. Relative paths use the launching terminal?s directory. 
 locks are released or recovered after exit or a crash.
 
 Each document opens in its own closable, reorderable tab and retains its scroll position
-and zoom. Select PDFs and EPUBs in the open dialog, drop multiple files, or pass
+and zoom. Select PDFs, EPUBs, and DjVu documents in the open dialog, drop multiple files, or pass
 multiple file paths at startup. Closing the last tab returns to the welcome view.
 Opening a file that is already open switches to its existing tab, preserving its
 position, zoom, and search. Relative paths and symbolic links to the same document
@@ -33,7 +35,7 @@ replacement so an interrupted write preserves the previous saved session.
 After a crash, the latest completed checkpoint is restored.
 
 Right-click and choose **Register file types** to add this installation to **Open With**
-for PDF and EPUB files. Windows also lists it in **Default Apps** for the current user,
+for PDF, EPUB, and DjVu files. Windows also lists it in **Default Apps** for the current user,
 without administrator access. Linux registers the executable or AppImage in your user
 applications; on macOS, run the installed `DocumentViewer.app`. Choose the default
 viewer through your system settings. Register again after moving the application.
@@ -122,7 +124,7 @@ both Windows x64 and ARM64. Linux and macOS continue to use prebuilt Qt kits.
 
 | Action | Control |
 | --- | --- |
-| Open PDF or EPUB | Open button, Ctrl+O, or drop a local file |
+| Open PDF, EPUB, or DjVu | Open button, Ctrl+O, or drop a local file |
 | Scroll continuously | Mouse wheel, trackpad, scrollbar, Page Up / Page Down |
 | Zoom | − / + buttons, percentage field, or Ctrl+wheel |
 | Zoom shortcuts | Ctrl+−, Ctrl++, Ctrl+= |
@@ -179,6 +181,24 @@ pages rather than reflowing the book. External network/file resources are not lo
 Archive reading uses the installed Qt 6.11.2 CorePrivate ZIP reader. Rebuild with
 matching private headers when upgrading Qt; distribute the matching deployed Qt DLLs.
 
+## DjVu support
+
+Files ending in `.djvu` or `.djv` (case-insensitive) open alongside PDFs and EPUBs.
+Single-page, bundled multipage, and indirect books are supported. Indirect books
+need their component files in the same directory or its subdirectories.
+The viewer renders visible tiles directly with DjVuLibre, preserving page rotation,
+continuous scrolling, zoom, navigation history, and session recovery. Embedded OCR
+text supports case-insensitive substring search, including overlapping matches;
+highlights cover the matching words. Image-only pages have no searchable text.
+DjVu hyperlinks and annotations are not currently interactive.
+
+CMake fetches the pinned upstream DjVuLibre 3.5.30.1 source revision and builds it
+with the application's compiler. No separate DjVu installation is needed. The
+installed package includes the decoder source and its license under `sources/`
+and `licenses/`. Legacy JPEG-encoded DjVu backgrounds are not supported by this
+build; standard IW44, JB2, and MMR pages are supported. Like PDF rendering, page
+decoding runs synchronously and complex pages can briefly delay input.
+
 ## Validation
 
 `build.cmd -Test` runs Qt Test offscreen against a generated three-page PDF. It
@@ -188,6 +208,8 @@ It also checks independent tab state, toolbar synchronization, keyboard tab
 switching and closing, and reopening after the last document is closed.
 Session tests cover periodic checkpoints without a close event, immediate saves
 on close, restored tab state, missing documents, empty sessions, and corrupt JSON.
+DjVu tests cover generated single/multipage books, all four rotations, tile rendering,
+OCR search, Unicode paths, invalid-file recovery, mixed tabs, and session recovery.
 EPUB tests cover versions 2 and 3, spine order, relative image/CSS resources,
 substring search, zoom/session recovery, and missing-chapter error recovery.
 Link tests cover internal and named PDF destinations, destination zoom, rotated

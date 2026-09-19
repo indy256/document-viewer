@@ -30,8 +30,16 @@ PdfView::~PdfView() {
 
 bool PdfView::open(const QString &path, const QString &password, QString *error) {
     QByteArray data;
+    std::unique_ptr<DjvuDocument> nextDjvu;
+    const auto suffix = QFileInfo(path).suffix().toLower();
     EpubDestinations nextDestinations;
-    if (QFileInfo(path).suffix().compare("epub", Qt::CaseInsensitive) == 0) {
+    if (suffix == "djvu" || suffix == "djv") {
+        nextDjvu = std::make_unique<DjvuDocument>();
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        const bool ok = nextDjvu->open(path, error);
+        QApplication::restoreOverrideCursor();
+        if (!ok) return false;
+    } else if (suffix == "epub") {
         QApplication::setOverrideCursor(Qt::WaitCursor);
         data = renderEpub(path, error, &nextDestinations);
         QApplication::restoreOverrideCursor();
@@ -45,15 +53,15 @@ bool PdfView::open(const QString &path, const QString &password, QString *error)
         data = file.readAll();
     }
     const auto pass = password.toUtf8();
-    auto next = FPDF_LoadMemDocument64(data.constData(), size_t(data.size()), pass.constData());
-    if (!next) {
+    auto next = nextDjvu ? nullptr : FPDF_LoadMemDocument64(data.constData(), size_t(data.size()), pass.constData());
+    if (!next && !nextDjvu) {
         *error = FPDF_GetLastError() == FPDF_ERR_PASSWORD
             ? QStringLiteral("This PDF needs a valid password.")
             : QStringLiteral("This file could not be read as a PDF. It may be damaged or unsupported.");
         return false;
     }
-    QVector<QSizeF> nextSizes;
-    const int count = FPDF_GetPageCount(next);
+    QVector<QSizeF> nextSizes = nextDjvu ? nextDjvu->sizes() : QVector<QSizeF>();
+    const int count = next ? FPDF_GetPageCount(next) : 0;
     for (int i = 0; i < count; ++i) {
         FS_SIZEF size{};
         if (!FPDF_GetPageSizeByIndexF(next, i, &size) || !std::isfinite(size.width)
@@ -72,6 +80,7 @@ bool PdfView::open(const QString &path, const QString &password, QString *error)
     }
     if (document) FPDF_CloseDocument(document);
     document = next;
+    djvu = std::move(nextDjvu);
     bytes = std::move(data); // PDFium borrows this memory until the document closes.
     sizes = std::move(nextSizes);
     epubDestinations = std::move(nextDestinations);
@@ -201,7 +210,7 @@ void PdfView::search(const QString &text) {
     matches.clear();
     selectedMatch = -1;
     nextSearchPage = 0;
-    if (document && !query.isEmpty()) searchTimer.start(200); // Debounce typing.
+    if ((document || djvu) && !query.isEmpty()) searchTimer.start(200); // Debounce typing.
     viewport()->update();
     emit searchChanged();
 }
@@ -209,7 +218,11 @@ void PdfView::search(const QString &text) {
 void PdfView::searchPage() {
     // Yield between pages so typing a new query or switching tabs can cancel/update a search.
     const int pageIndex = nextSearchPage++;
-    auto page = FPDF_LoadPage(document, pageIndex);
+    if (djvu) {
+        for (const auto &rectangles : djvu->search(pageIndex, query))
+            matches.append({pageIndex, rectangles});
+    }
+    auto page = document ? FPDF_LoadPage(document, pageIndex) : nullptr;
     if (page) {
         auto text = FPDFText_LoadPage(page);
         if (text) {
@@ -425,14 +438,14 @@ void PdfView::mouseReleaseEvent(QMouseEvent *event) {
 void PdfView::paintEvent(QPaintEvent *) {
     QPainter painter(viewport());
     painter.fillRect(viewport()->rect(), QColor("#e8ecf2"));
-    if (!document) {
+    if (!document && !djvu) {
         painter.setPen(QColor("#26344b"));
         painter.setFont(QFont("Segoe UI", 23, QFont::DemiBold));
         painter.drawText(viewport()->rect().adjusted(0, -50, 0, -50), Qt::AlignCenter, "A little space to read.");
         painter.setFont(QFont("Segoe UI", 11));
         painter.setPen(QColor("#66758c"));
         painter.drawText(viewport()->rect().adjusted(0, 40, 0, 40), Qt::AlignCenter,
-                         "Open a PDF or EPUB, or drop one here\nCtrl+O to open  ·  Ctrl+wheel to zoom");
+                         "Open a PDF, EPUB, or DjVu, or drop one here\nCtrl+O to open  ·  Ctrl+wheel to zoom");
         return;
     }
     const QPoint offset(horizontalScrollBar()->value(), verticalScrollBar()->value());
@@ -447,24 +460,31 @@ void PdfView::paintEvent(QPaintEvent *) {
         const QRect visible = rect.intersected(viewport()->rect()).translated(-rect.topLeft());
         if (visible.isEmpty()) continue;
         FPDF_PAGE page = nullptr;
+        bool renderFailed = false;
         for (int y = visible.top() / tileSize; y <= visible.bottom() / tileSize; ++y) {
             for (int x = visible.left() / tileSize; x <= visible.right() / tileSize; ++x) {
                 const QString key = QString("%1/%2/%3/%4").arg(i).arg(x).arg(y).arg(dpr);
                 QImage *image = cache.object(key);
                 if (!image) {
-                    if (!page) page = FPDF_LoadPage(document, i);
-                    if (!page) continue;
+                    if (document && !page) page = FPDF_LoadPage(document, i);
+                    if (!page && !djvu) continue;
                     const int w = qCeil(std::min(tileSize, rect.width() - x * tileSize) * dpr);
                     const int h = qCeil(std::min(tileSize, rect.height() - y * tileSize) * dpr);
                     auto rendered = new QImage(w, h, QImage::Format_ARGB32);
                     if (rendered->isNull()) { delete rendered; continue; }
                     rendered->fill(Qt::white);
-                    auto bitmap = FPDFBitmap_CreateEx(w, h, FPDFBitmap_BGRA,
-                        rendered->bits(), rendered->bytesPerLine());
-                    if (!bitmap) { delete rendered; continue; }
-                    FPDF_RenderPageBitmap(bitmap, page, -qRound(x * tileSize * dpr), -qRound(y * tileSize * dpr),
-                        qCeil(rect.width() * dpr), qCeil(rect.height() * dpr), 0, FPDF_ANNOT);
-                    FPDFBitmap_Destroy(bitmap);
+                    if (djvu) {
+                        *rendered = djvu->render(i, QSize(qCeil(rect.width() * dpr), qCeil(rect.height() * dpr)),
+                            QRect(qRound(x * tileSize * dpr), qRound(y * tileSize * dpr), w, h));
+                        if (rendered->isNull()) { delete rendered; renderFailed = true; continue; }
+                    } else {
+                        auto bitmap = FPDFBitmap_CreateEx(w, h, FPDFBitmap_BGRA,
+                            rendered->bits(), rendered->bytesPerLine());
+                        if (!bitmap) { delete rendered; continue; }
+                        FPDF_RenderPageBitmap(bitmap, page, -qRound(x * tileSize * dpr), -qRound(y * tileSize * dpr),
+                            qCeil(rect.width() * dpr), qCeil(rect.height() * dpr), 0, FPDF_ANNOT);
+                        FPDFBitmap_Destroy(bitmap);
+                    }
                     rendered->setDevicePixelRatio(dpr);
                     const int cost = int(rendered->sizeInBytes() / 1024) + 1;
                     cache.insert(key, rendered, cost);
@@ -474,6 +494,11 @@ void PdfView::paintEvent(QPaintEvent *) {
             }
         }
         if (page) FPDF_ClosePage(page);
+        if (renderFailed) {
+            painter.setPen(QColor("#66758c"));
+            painter.drawText(rect.intersected(viewport()->rect()), Qt::AlignCenter,
+                "This DjVu page could not be rendered.");
+        }
         for (int m = 0; m < matches.size(); ++m) {
             const auto &match = matches[m];
             if (match.page < i) continue;
