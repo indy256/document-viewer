@@ -61,6 +61,62 @@ private slots:
         QApplication::setFont(QFont(QFontDatabase::applicationFontFamilies(fontId).first(), 10));
     }
     void cleanupTestCase() { FPDF_DestroyLibrary(); }
+    void navigationHistory() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("history.pdf");
+        {
+            QPdfWriter writer(path);
+            QPainter painter(&writer);
+            for (int i = 0; i < 4; ++i) {
+                if (i) writer.newPage();
+                painter.drawText(50, 100, "History test");
+            }
+        }
+        Window window;
+        window.show();
+        QTest::mouseClick(&window, Qt::BackButton);
+        QVERIFY(window.openDocument(path));
+        QCoreApplication::processEvents();
+        auto tabs = window.findChild<QTabWidget *>();
+        auto view = qobject_cast<PdfView *>(tabs->currentWidget());
+        QVERIFY(view);
+        view->setZoom(1.0);
+        view->goBack();
+        view->goForward();
+        QCOMPARE(view->currentPage(), 0);
+        view->verticalScrollBar()->setValue(123);
+        view->goToPage(3);
+        QTest::keyClick(view, Qt::Key_Left, Qt::AltModifier);
+        QCOMPARE(view->verticalScrollBar()->value(), 123);
+        QTest::keyClick(view, Qt::Key_Forward);
+        QCOMPARE(view->currentPage(), 3);
+        QTest::mouseClick(view->verticalScrollBar(), Qt::BackButton);
+        QCOMPARE(view->verticalScrollBar()->value(), 123);
+        view->goToPage(1); // A new jump discards the forward branch.
+        view->goForward();
+        QCOMPARE(view->currentPage(), 1);
+        view->goToPage(1); // A no-op must not add a history entry.
+        view->goBack();
+        QCOMPARE(view->verticalScrollBar()->value(), 123);
+        const auto secondPath = directory.filePath("second.pdf");
+        QVERIFY(QFile::copy(path, secondPath));
+        QVERIFY(window.openDocument(secondPath));
+        auto second = qobject_cast<PdfView *>(tabs->currentWidget());
+        QVERIFY(second && second != view);
+        QTest::keyClick(second, Qt::Key_Forward);
+        QCOMPARE(second->currentPage(), 0);
+        tabs->setCurrentWidget(view);
+        QTest::keyClick(view, Qt::Key_Right, Qt::AltModifier);
+        QCOMPARE(view->currentPage(), 1);
+        QString error;
+        QVERIFY(!view->open(directory.filePath("missing.pdf"), {}, &error));
+        view->goBack();
+        QCOMPARE(view->verticalScrollBar()->value(), 123);
+        QVERIFY(view->open(path, {}, &error));
+        view->goForward();
+        view->goBack();
+        QCOMPARE(view->verticalScrollBar()->value(), 0);
+    }
     void pdfLinks_data() {
         QTest::addColumn<int>("rotation");
         QTest::newRow("normal") << 0;
@@ -121,6 +177,7 @@ private slots:
         QTest::mouseMove(view.viewport(), first);
         QCOMPARE(view.viewport()->cursor().shape(), Qt::PointingHandCursor);
         const auto before = view.verticalScrollBar()->value();
+        const auto beforeX = view.horizontalScrollBar()->value();
         QTest::mouseClick(view.viewport(), Qt::RightButton, Qt::NoModifier, first);
         QCOMPARE(view.verticalScrollBar()->value(), before);
         QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, first);
@@ -129,9 +186,27 @@ private slots:
         QCOMPARE(view.verticalScrollBar()->value(), before);
         QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, first);
         QCOMPARE(view.currentPage(), 1);
-        QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, point(620));
+        const auto destination = view.verticalScrollBar()->value();
+        QTest::mouseClick(view.viewport(), Qt::BackButton);
+        QCOMPARE(view.verticalScrollBar()->value(), before);
+        QCOMPARE(view.horizontalScrollBar()->value(), beforeX);
+        QTest::mouseClick(view.viewport(), Qt::ForwardButton);
+        QCOMPARE(view.verticalScrollBar()->value(), destination);
+        const auto secondLink = point(620);
+        const auto secondOrigin = view.verticalScrollBar()->value();
+        const auto secondOriginX = view.horizontalScrollBar()->value();
+        QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, secondLink);
         QCOMPARE(view.currentPage(), 2);
         QCOMPARE(view.zoom(), 1.5);
+        view.verticalScrollBar()->setValue(view.verticalScrollBar()->value() + 40);
+        const auto secondDestination = view.verticalScrollBar()->value();
+        QTest::mouseClick(view.viewport(), Qt::BackButton);
+        QCOMPARE(view.zoom(), 1.2);
+        QCOMPARE(view.verticalScrollBar()->value(), secondOrigin);
+        QCOMPARE(view.horizontalScrollBar()->value(), secondOriginX);
+        QTest::mouseClick(view.viewport(), Qt::ForwardButton);
+        QCOMPARE(view.zoom(), 1.5);
+        QCOMPARE(view.verticalScrollBar()->value(), secondDestination);
         view.setZoom(1.2);
         UrlReceiver receiver;
         QDesktopServices::setUrlHandler("https", &receiver, "open");
@@ -159,7 +234,14 @@ private slots:
             for (int x = 0; x < view.viewport()->width() && !clicked; x += 4) {
                 QTest::mouseMove(view.viewport(), QPoint(x, y), 0);
                 if (view.viewport()->cursor().shape() == Qt::PointingHandCursor) {
+                    const int origin = view.verticalScrollBar()->value();
                     QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(x, y));
+                    const int destination = view.verticalScrollBar()->value();
+                    QTest::mouseClick(view.viewport(), Qt::BackButton);
+                    QCOMPARE(view.verticalScrollBar()->value(), origin);
+                    QCOMPARE(view.fitMode(), PdfView::Fit::Width);
+                    QTest::mouseClick(view.viewport(), Qt::ForwardButton);
+                    QCOMPARE(view.verticalScrollBar()->value(), destination);
                     clicked = true;
                 }
             }

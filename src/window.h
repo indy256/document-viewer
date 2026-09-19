@@ -12,6 +12,7 @@ class QDragEnterEvent;
 class QDropEvent;
 class QLabel;
 class QLineEdit;
+class QMouseEvent;
 class QSpinBox;
 class QTabWidget;
 class QToolBar;
@@ -24,6 +25,7 @@ public:
     bool saveSession();
 
 protected:
+    void mousePressEvent(QMouseEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void showEvent(QShowEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;

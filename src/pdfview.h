@@ -21,7 +21,9 @@ public:
     Fit fitMode() const { return fit; }
     void setZoom(double value);
     void setFit(Fit mode);
-    void goToPage(int page);
+    void goToPage(int page, bool remember = true);
+    void goBack();
+    void goForward();
     void search(const QString &text);
     void nextMatch(int direction = 1);
     QString searchText() const { return query; }
@@ -41,6 +43,19 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void scrollContentsBy(int, int) override;
 private:
+    struct NavigationPosition {
+        int page;
+        QPointF offset;
+        double zoom;
+        Fit fit;
+        bool operator==(const NavigationPosition &other) const {
+            return page == other.page && offset == other.offset && zoom == other.zoom && fit == other.fit;
+        }
+    };
+    NavigationPosition navigationPosition() const;
+    void recordNavigation(const NavigationPosition &before);
+    void restoreNavigation(const NavigationPosition &position);
+    QVector<NavigationPosition> backHistory, forwardHistory;
     void layoutPages();
     void applyFit();
     void searchPage();
@@ -60,6 +75,7 @@ private:
     };
     LinkTarget linkAt(const QPoint &position) const;
     void activateLink(const LinkTarget &target);
+    void followLink(const LinkTarget &target);
     void updateLinkCursor();
     LinkTarget pressedLink;
     QPoint pressPosition;

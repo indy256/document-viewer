@@ -91,6 +91,17 @@ void Window::contextMenuEvent(QContextMenuEvent *event) {
     if (selected == update && Updater::installLatest(this, [this] { return saveSession(); })) close();
 }
 
+void Window::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::BackButton || event->button() == Qt::ForwardButton) {
+        if (view) {
+            if (event->button() == Qt::BackButton) view->goBack(); else view->goForward();
+        }
+        event->accept();
+        return;
+    }
+    QMainWindow::mousePressEvent(event);
+}
+
 void Window::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
     if (windowHandle()) windowHandle()->installEventFilter(this);
@@ -139,6 +150,14 @@ bool Window::eventFilter(QObject *watched, QEvent *event) {
 }
 
 void Window::setupToolbars() {
+    auto back = new QAction("Back", this);
+    back->setShortcuts({QKeySequence("Alt+Left"), QKeySequence(Qt::Key_Back)});
+    addAction(back);
+    connect(back, &QAction::triggered, this, [this] { if (view) view->goBack(); });
+    auto forward = new QAction("Forward", this);
+    forward->setShortcuts({QKeySequence("Alt+Right"), QKeySequence(Qt::Key_Forward)});
+    addAction(forward);
+    connect(forward, &QAction::triggered, this, [this] { if (view) view->goForward(); });
     auto toolbar = addToolBar("Reading controls");
     toolbar->setMovable(false);
     auto openAction = toolbar->addAction("Open");
@@ -150,8 +169,7 @@ void Window::setupToolbars() {
     });
     toolbar->addSeparator();
     auto previous = toolbar->addAction("‹");
-    previous->setToolTip("Previous page (Alt+Left)");
-    previous->setShortcut(QKeySequence("Alt+Left"));
+    previous->setToolTip("Previous page");
     page = new QSpinBox;
     page->setRange(1, 1);
     page->setPrefix("Page ");
@@ -161,8 +179,7 @@ void Window::setupToolbars() {
     total = new QLabel(" / 0  ");
     toolbar->addWidget(total);
     auto next = toolbar->addAction("›");
-    next->setToolTip("Next page (Alt+Right)");
-    next->setShortcut(QKeySequence("Alt+Right"));
+    next->setToolTip("Next page");
     auto spacer = new QWidget;
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     toolbar->addWidget(spacer);
@@ -393,7 +410,7 @@ void Window::restoreSession() {
         if (path.isEmpty() || !openDocument(path, true)) { ++skipped; continue; }
         const double savedZoom = entry.value("zoom").toDouble(1.0);
         view->setZoom(std::clamp(savedZoom, 0.1, 5.0));
-        view->goToPage(entry.value("page").toInt());
+        view->goToPage(entry.value("page").toInt(), false);
         const int fit = entry.value("fit").toInt();
         if (fit == int(PdfView::Fit::Width) || fit == int(PdfView::Fit::Page))
             view->setFit(static_cast<PdfView::Fit>(fit));

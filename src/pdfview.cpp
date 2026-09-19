@@ -76,6 +76,8 @@ bool PdfView::open(const QString &path, const QString &password, QString *error)
     sizes = std::move(nextSizes);
     epubDestinations = std::move(nextDestinations);
     pressedLink = {};
+    backHistory.clear();
+    forwardHistory.clear();
     viewport()->unsetCursor();
     search(QString());
     pages.clear();
@@ -149,9 +151,48 @@ void PdfView::setFit(Fit mode) {
     if (fit != Fit::Custom) applyFit();
 }
 
-void PdfView::goToPage(int page) {
+void PdfView::goToPage(int page, bool remember) {
     if (page < 0 || page >= pages.size()) return;
+    const auto before = navigationPosition();
     verticalScrollBar()->setValue(qRound(pages[page].top() - 24));
+    if (remember) recordNavigation(before);
+}
+
+PdfView::NavigationPosition PdfView::navigationPosition() const {
+    const int page = currentPage();
+    const QPointF scroll(horizontalScrollBar()->value(), verticalScrollBar()->value());
+    return {page, (scroll - pages[page].topLeft()) / scale, scale, fit};
+}
+
+void PdfView::recordNavigation(const NavigationPosition &before) {
+    if (before == navigationPosition()) return;
+    backHistory.append(before);
+    forwardHistory.clear();
+}
+
+void PdfView::restoreNavigation(const NavigationPosition &position) {
+    pressedLink = {};
+    setZoom(position.zoom);
+    auto scrollToPosition = [&] {
+        const auto scroll = pages[position.page].topLeft() + position.offset * scale;
+        horizontalScrollBar()->setValue(qRound(scroll.x()));
+        verticalScrollBar()->setValue(qRound(scroll.y()));
+    };
+    scrollToPosition();
+    setFit(position.fit);
+    scrollToPosition();
+}
+
+void PdfView::goBack() {
+    if (backHistory.isEmpty()) return;
+    forwardHistory.append(navigationPosition());
+    restoreNavigation(backHistory.takeLast());
+}
+
+void PdfView::goForward() {
+    if (forwardHistory.isEmpty()) return;
+    backHistory.append(navigationPosition());
+    restoreNavigation(forwardHistory.takeLast());
 }
 
 void PdfView::search(const QString &text) {
@@ -220,10 +261,12 @@ void PdfView::revealMatch() {
     if (selectedMatch < 0 || selectedMatch >= matches.size()) return;
     const auto &match = matches[selectedMatch];
     if (match.rectangles.isEmpty()) { goToPage(match.page); return; }
+    const auto before = navigationPosition();
     const auto &page = pages[match.page];
     const auto point = match.rectangles.first().center();
     horizontalScrollBar()->setValue(qRound(page.x() + point.x() * page.width() - viewport()->width() / 2.0));
     verticalScrollBar()->setValue(qRound(page.y() + point.y() * page.height() - viewport()->height() / 2.0));
+    recordNavigation(before);
 }
 
 void PdfView::resizeEvent(QResizeEvent *event) {
@@ -298,6 +341,15 @@ PdfView::LinkTarget PdfView::linkAt(const QPoint &position) const {
 }
 
 void PdfView::activateLink(const LinkTarget &target) {
+    const bool internal = target.url.isEmpty()
+        ? target.page >= 0 && target.page < pages.size() : epubDestinations.contains(target.url);
+    if (!internal) { followLink(target); return; }
+    const auto before = navigationPosition();
+    followLink(target);
+    recordNavigation(before);
+}
+
+void PdfView::followLink(const LinkTarget &target) {
     if (!target.url.isEmpty()) {
         const auto found = epubDestinations.constFind(target.url);
         if (found != epubDestinations.cend()) {
@@ -309,7 +361,7 @@ void PdfView::activateLink(const LinkTarget &target) {
     }
     if (target.page < 0 || target.page >= pages.size()) return;
     if (target.zoom > 0) setZoom(target.zoom);
-    goToPage(target.page);
+    verticalScrollBar()->setValue(qRound(pages[target.page].top() - 24));
     auto page = FPDF_LoadPage(document, target.page);
     if (!page) return;
     const auto rect = pages[target.page].toAlignedRect();
@@ -343,6 +395,11 @@ void PdfView::mouseMoveEvent(QMouseEvent *event) {
 
 void PdfView::mousePressEvent(QMouseEvent *event) {
     pressedLink = {};
+    if (event->button() == Qt::BackButton || event->button() == Qt::ForwardButton) {
+        if (event->button() == Qt::BackButton) goBack(); else goForward();
+        event->accept();
+        return;
+    }
     if (event->button() == Qt::LeftButton) {
         pressPosition = event->position().toPoint();
         pressedLink = linkAt(pressPosition);

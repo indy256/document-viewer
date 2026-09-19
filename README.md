@@ -68,6 +68,11 @@ high-DPI support.
 An unsuccessful open keeps the previous document available.
 
 Click a document link to jump to its PDF destination or EPUB chapter/anchor.
+Use the mouse Back/Forward buttons, Alt+Left/Alt+Right, or dedicated Back/Forward
+keys to revisit reading positions before and after jumps. Each tab keeps its own
+history of link, page, and search jumps, including position and zoom. Scrolling
+does not add history entries; a new jump after going back clears forward history.
+History lasts until the document is closed.
 Web and email links open in the system's default browser or mail application.
 Supported links show a hand cursor; dragging across a link does not activate it.
 PDF launch actions, links to other local files, and script links are not executed.
@@ -123,7 +128,8 @@ both Windows x64 and ARM64. Linux and macOS continue to use prebuilt Qt kits.
 | Zoom shortcuts | Ctrl+−, Ctrl++, Ctrl+= |
 | Fit width | Toolbar button or Ctrl+0 |
 | Fit page | Zoom dropdown |
-| Navigate | Page number, arrow buttons, Alt+Left / Alt+Right, or document links |
+| Navigate pages | Page number, arrow buttons, or document links |
+| Back / Forward in history | Mouse Back / Forward buttons, Alt+Left / Alt+Right, or Back / Forward keys |
 | Switch tabs | Click a tab, Ctrl+Tab, or Ctrl+Shift+Tab |
 | Close tab | Tab close button or Ctrl+W |
 | Exit and save session | Escape |
