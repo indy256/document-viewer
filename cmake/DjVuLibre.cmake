@@ -20,6 +20,10 @@ if(WIN32)
 else()
     find_package(Threads REQUIRED)
     target_link_libraries(djvu_decoder PRIVATE Threads::Threads)
+    # Autoconf derives these separately from HAVE_*; the Windows headers supply
+    # them automatically. They also affect GString's public class declarations,
+    # so consumers of the C++ headers (including our fixture encoder) need them.
+    target_compile_definitions(djvu_decoder PUBLIC HAS_WCHAR=1 HAS_WCTYPE=1 HAS_MBSTATE=1)
     target_compile_definitions(djvu_decoder PRIVATE UNIX=1 HAVE_PTHREAD=1
         HAVE_UNISTD_H=1 HAVE_SYS_MMAN_H=1 HAVE_GETPWUID=1 HAVE_MKSTEMP=1
         HAVE_INTEL_ATOMIC_BUILTINS=1)
