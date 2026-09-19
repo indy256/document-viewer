@@ -19,14 +19,14 @@ if(WIN32)
     target_compile_definitions(djvu_decoder PRIVATE WIN32 NOMINMAX _CRT_SECURE_NO_WARNINGS)
 else()
     find_package(Threads REQUIRED)
-    target_link_libraries(djvu_decoder PRIVATE Threads::Threads)
+    target_link_libraries(djvu_decoder PUBLIC Threads::Threads)
     # Autoconf derives these separately from HAVE_*; the Windows headers supply
     # them automatically. They also affect GString's public class declarations,
     # so consumers of the C++ headers (including our fixture encoder) need them.
-    target_compile_definitions(djvu_decoder PUBLIC HAS_WCHAR=1 HAS_WCTYPE=1 HAS_MBSTATE=1)
-    target_compile_definitions(djvu_decoder PRIVATE UNIX=1 HAVE_PTHREAD=1
-        HAVE_UNISTD_H=1 HAVE_SYS_MMAN_H=1 HAVE_GETPWUID=1 HAVE_MKSTEMP=1
-        HAVE_INTEL_ATOMIC_BUILTINS=1)
+    target_compile_definitions(djvu_decoder PUBLIC HAS_WCHAR=1 HAS_WCTYPE=1 HAS_MBSTATE=1
+        HAVE_PTHREAD=1 HAVE_INTEL_ATOMIC_BUILTINS=1)
+    target_compile_definitions(djvu_decoder PRIVATE UNIX=1
+        HAVE_UNISTD_H=1 HAVE_SYS_MMAN_H=1 HAVE_GETPWUID=1 HAVE_MKSTEMP=1)
 endif()
 install(FILES "${djvulibre_SOURCE_DIR}/COPYING" DESTINATION licenses RENAME DjVuLibre-COPYING.txt)
 # Include the exact decoder source used to build the distributed binary.
