@@ -17,7 +17,7 @@
 PdfView::PdfView(QWidget *parent) : QAbstractScrollArea(parent) {
     setFrameShape(QFrame::NoFrame);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-    verticalScrollBar()->setSingleStep(60); // Three times Qt's default wheel scrolling distance.
+    verticalScrollBar()->setSingleStep(42);
     setFocusPolicy(Qt::StrongFocus);
     viewport()->setAutoFillBackground(false);
     viewport()->setMouseTracking(true);
