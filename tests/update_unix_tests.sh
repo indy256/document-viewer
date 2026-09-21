@@ -26,6 +26,8 @@ for scenario in install rollback invalid-target cancel; do
     scenario_dir="$root/space ' dollar \$ $scenario"
     stage="$scenario_dir/.dv-update-test"
     mkdir -p "$stage"
+    mkdir "$stage/download-metadata"
+    echo '{}' >"$stage/download-metadata/release.json"
     target="$scenario_dir/viewer"
     cat >"$target" <<'FIXTURE'
 #!/bin/sh
@@ -60,7 +62,7 @@ FIXTURE
             owner=
             if [ "$scenario" = install ]; then
                 wait "$worker"
-                test -f "$stage/installed"
+                test ! -e "$stage"
                 cmp "$target" "$scenario_dir/expected"
             else
                 if wait "$worker"; then echo 'Broken replacement reported success'; exit 1; fi
@@ -69,7 +71,10 @@ FIXTURE
         fi
     fi
     worker=
-    if [ "$scenario" != install ]; then cmp "$target" "$scenario_dir/original"; fi
+    if [ "$scenario" != install ]; then
+        cmp "$target" "$scenario_dir/original"
+        test -f "$stage/failed"
+    fi
     cleanup
     owner=
     printf 'PASS: %s\n' "$scenario"

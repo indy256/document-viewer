@@ -62,5 +62,7 @@ moved=yes
 mv "$incoming" "$destination"
 launch
 success=yes
-echo 'Update installed successfully.' >"$workspace/installed"
-# The previous app and diagnostic log remain in the staging folder.
+# The replacement has started; the validated staging folder is no longer needed.
+cd -- "$(dirname -- "$destination")"
+exec >/dev/null 2>&1
+rm -rf -- "$workspace"

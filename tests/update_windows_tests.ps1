@@ -42,6 +42,9 @@ foreach ($scenario in @('install', 'rollback', 'invalid-target', 'cancel')) {
     $caseRoot = Join-Path $testRoot ("space ' dollar `$ " + $scenario)
     $staging = Join-Path $caseRoot '.dv-update-test'
     New-Item -ItemType Directory -Path $staging -Force | Out-Null
+    $metadataDirectory = Join-Path $staging 'download-metadata'
+    New-Item -ItemType Directory -Path $metadataDirectory | Out-Null
+    [IO.File]::WriteAllText((Join-Path $metadataDirectory 'release.json'), '{}')
     $target = Join-Path $caseRoot 'viewer.exe'
     Copy-Item -LiteralPath $fixture -Destination $target
     $append = [IO.File]::OpenWrite($target)
@@ -82,13 +85,16 @@ foreach ($scenario in @('install', 'rollback', 'invalid-target', 'cancel')) {
                 if (!$worker.WaitForExit(15000)) { throw 'Installer timed out' }
                 if ($scenario -eq 'install') {
                     if ($worker.ExitCode -ne 0 -or (Get-TestFileHash $target) -ne $expected) { throw 'Replacement failed' }
-                    Wait-File (Join-Path $staging 'installed')
+                    if (Test-Path -LiteralPath $staging) { throw 'Successful update left its staging directory behind' }
                 } elseif ($worker.ExitCode -eq 0) { throw 'Broken replacement reported success' }
                 Wait-File (Join-Path $caseRoot 'restarted')
             }
         }
         if ($scenario -ne 'install' -and (Get-TestFileHash $target) -ne $original) {
             throw 'Original application was not preserved'
+        }
+        if ($scenario -ne 'install' -and !(Test-Path -LiteralPath (Join-Path $staging 'failed'))) {
+            throw 'Failure diagnostics were not preserved'
         }
         Write-Output "PASS: $scenario"
     } finally {

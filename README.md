@@ -50,10 +50,10 @@ Automatic updates support the portable Windows EXE, the Linux AppImage, and an
 installed macOS app bundle. The application folder must be writable. Windows uses
 the system curl and PowerShell; Linux and macOS require curl. Development builds
 and unpacked Windows deployment folders are not replaced by the updater.
-Update logs are retained in a `.dv-update-*` folder beside the application.
-The previous app is restored if replacement or startup fails; on Unix, a successful
-update also retains the previous app in that folder. Windows waits for the portable
-launcher to exit before replacing its EXE.
+Successful updates remove their `.dv-update-*` staging folder, including downloads,
+logs, and the previous app. If replacement or startup fails, the previous app is
+restored and diagnostic files are retained in that folder. Windows waits for the
+portable launcher to exit before replacing its EXE.
 
 Session data is stored in `%LOCALAPPDATA%\Document Viewer\session.json` on Windows,
 `~/.local/share/Document Viewer/session.json` on Linux (or `$XDG_DATA_HOME`), and

@@ -220,9 +220,14 @@ bool installLatest(QWidget *parent, const std::function<bool()> &saveSession) {
     if (progress.wasCanceled()) return false;
     QProcess helper;
     helper.setProgram(shell);
-    helper.setWorkingDirectory(directory);
+    helper.setWorkingDirectory(QFileInfo(target).absolutePath());
     helper.setProcessEnvironment(cleanEnvironment());
+#ifdef Q_OS_WIN
+    // An inherited log handle would prevent the helper deleting its staging folder.
+    helper.setStandardOutputFile(QProcess::nullDevice());
+#else
     helper.setStandardOutputFile(directory + "/helper.log");
+#endif
     helper.setProcessChannelMode(QProcess::MergedChannels);
 #ifdef Q_OS_WIN
     const auto script = directory + "/install.ps1";

@@ -50,8 +50,6 @@ try {
     $start.UseShellExecute = $false
     $restarted = [Diagnostics.Process]::Start($start)
     if ($restarted.WaitForExit(2000)) { throw 'The updated application exited immediately.' }
-    Remove-Item -LiteralPath $backupPath
-    [IO.File]::WriteAllText((Join-Path $stagePath 'installed'), 'Update installed successfully.')
 } catch {
     $reason = $_.Exception.Message
     if ($installed -and (Test-Path -LiteralPath $backupPath)) {
@@ -61,6 +59,7 @@ try {
         } catch { $reason += ' Could not restore the previous version: ' + $_.Exception.Message }
     }
     [IO.File]::WriteAllText((Join-Path $stagePath 'failed'), $reason)
+    [IO.File]::WriteAllText((Join-Path $stagePath 'helper.log'), $reason)
     Write-Output $reason
     if ($committed -and $viewer.HasExited -and $launcher.HasExited) {
         try {
@@ -71,4 +70,16 @@ try {
         } catch { Write-Output $_.Exception.Message }
     }
     exit 1
+}
+# Installation succeeded. Cleanup failures must not roll back a running app.
+Set-Location -LiteralPath ([IO.Path]::GetDirectoryName($targetPath))
+for ($retry = 0; $retry -lt 30; $retry++) {
+    try {
+        # stagePath was validated above as this app's adjacent staging directory.
+        Remove-Item -LiteralPath $stagePath -Recurse -Force
+        break
+    } catch {
+        if ($retry -eq 29) { throw }
+        Start-Sleep -Milliseconds 200
+    }
 }
