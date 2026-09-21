@@ -94,17 +94,25 @@ def wait_for_foreground(hwnd):
         time.sleep(0.05)
     raise AssertionError("File open did not restore the existing window" +
                          (" and bring it to the foreground" if check_foreground else ""))
-def wait_for_documents(expected):
+def wait_for_documents(expected, active_tab=None):
     deadline = time.monotonic() + 20
     state = {}
+    read_error = None
     while time.monotonic() < deadline:
-        if session.exists():
+        try:
             state = json.loads(session.read_text(encoding="utf-8"))
+        except (FileNotFoundError, PermissionError) as error:
+            # QSaveFile replaces the session during autosave. Windows can
+            # temporarily deny access while that replacement is in progress.
+            read_error = error
+        else:
+            read_error = None
             actual = [Path(item['path']) for item in state.get('documents', [])]
-            if actual == expected:
+            if actual == expected and (active_tab is None or state.get('activeTab') == active_tab):
                 return state
         time.sleep(0.1)
-    raise AssertionError(f"Expected {expected}, saved state: {state}; windows: {windows()}")
+    raise AssertionError(f"Expected {expected}, active tab: {active_tab}; saved state: {state}; "
+                         f"last read error: {read_error}; windows: {windows()}")
 try:
  if check_foreground:
   cover = u.CreateWindowExW(0, 'STATIC', 'File-open foreground test', 0x90800000,
@@ -124,19 +132,13 @@ try:
     processes.append(second)
     assert second.wait(20) == 0, f"Second launch failed: {windows()}"
     wait_for_foreground(hwnd)
-    state = wait_for_documents([work/'first.pdf', work/second_name])
-    assert state['activeTab'] == 1, state
+    wait_for_documents([work/'first.pdf', work/second_name], active_tab=1)
     hwnd = background_viewer(minimized=True)
     duplicate=subprocess.Popen([str(sender),str(work/'first.pdf')],cwd=work.parent)
     processes.append(duplicate)
     assert duplicate.wait(20) == 0
     wait_for_foreground(hwnd)
-    deadline=time.monotonic()+15
-    while time.monotonic() < deadline:
-        state=json.loads(session.read_text(encoding="utf-8"))
-        if state['activeTab'] == 0: break
-        time.sleep(0.1)
-    assert len(state['documents']) == 2 and state['activeTab'] == 0, state
+    wait_for_documents([work/'first.pdf', work/second_name], active_tab=0)
     windows(True)
     assert first.wait(10) == 0
     print("PASS: repeated launches opened tabs, selected existing tabs, and restored minimized windows" +
