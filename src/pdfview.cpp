@@ -17,7 +17,7 @@
 PdfView::PdfView(QWidget *parent) : QAbstractScrollArea(parent) {
     setFrameShape(QFrame::NoFrame);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-    verticalScrollBar()->setSingleStep(29);
+    verticalScrollBar()->setSingleStep(15);
     setFocusPolicy(Qt::StrongFocus);
     viewport()->setAutoFillBackground(false);
     viewport()->setMouseTracking(true);
