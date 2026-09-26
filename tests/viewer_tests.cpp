@@ -443,7 +443,7 @@ private slots:
                     const int destination = view.verticalScrollBar()->value();
                     QTest::mouseClick(view.viewport(), Qt::BackButton);
                     QCOMPARE(view.verticalScrollBar()->value(), origin);
-                    QCOMPARE(view.fitMode(), PdfView::Fit::Width);
+                    QCOMPARE(view.fitMode(), PdfView::Fit::Custom);
                     QTest::mouseClick(view.viewport(), Qt::ForwardButton);
                     QCOMPARE(view.verticalScrollBar()->value(), destination);
                     clicked = true;
@@ -781,6 +781,13 @@ private slots:
         QCOMPARE(tabs->count(), 1); // The welcome tab is replaced.
         auto first = qobject_cast<PdfView *>(tabs->currentWidget());
         QVERIFY(first);
+        auto document = FPDF_LoadDocument(firstPath.toUtf8().constData(), nullptr);
+        QVERIFY(document);
+        FS_SIZEF pageSize{};
+        QVERIFY(FPDF_GetPageSizeByIndexF(document, 0, &pageSize));
+        FPDF_CloseDocument(document);
+        QCOMPARE(first->zoom(), first->viewport()->width() * 0.80 / pageSize.width);
+        QCOMPARE(first->verticalScrollBar()->value(), 0);
         first->setZoom(1.5);
         first->goToPage(1);
         const int position = first->verticalScrollBar()->value();
@@ -788,6 +795,7 @@ private slots:
         QCOMPARE(tabs->count(), 2);
         auto second = qobject_cast<PdfView *>(tabs->currentWidget());
         QVERIFY(second != first);
+        QCOMPARE(second->zoom(), second->viewport()->width() * 0.80 / pageSize.width);
         second->setZoom(0.5);
         tabs->setCurrentIndex(0);
         QCOMPARE(first->zoom(), 1.5);

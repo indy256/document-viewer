@@ -111,8 +111,7 @@ bool PdfView::open(const QString &path, const QString &password, QString *error)
     search(QString());
     pages.clear();
     cache.clear();
-    fit = Fit::Width;
-    applyFit();
+    setInitialZoom();
     verticalScrollBar()->setValue(0);
     horizontalScrollBar()->setValue(0);
     emit pageChanged(0);
@@ -158,6 +157,14 @@ void PdfView::setZoom(double value) {
     horizontalScrollBar()->setValue(qRound(target.x() - viewport()->width() / 2.0));
     verticalScrollBar()->setValue(qRound(target.y() - viewport()->height() / 2.0));
     emit zoomChanged(scale);
+}
+
+void PdfView::setInitialZoom() {
+    if (sizes.isEmpty()) return;
+    double width = 0;
+    for (const auto &size : sizes) width = std::max(width, size.width());
+    if (pages.isEmpty()) layoutPages();
+    setZoom(viewport()->width() * 0.80 / width);
 }
 
 void PdfView::applyFit() {

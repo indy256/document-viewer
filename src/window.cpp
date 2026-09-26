@@ -323,8 +323,8 @@ bool Window::openDocument(const QString &path, bool restoring) {
         tabs->removeTab(tabs->indexOf(empty));
         delete empty;
     }
-    // Apply the initial fit after the tab has its final viewport dimensions.
-    opened->setFit(PdfView::Fit::Width);
+    // Apply the initial zoom after the tab has its final viewport dimensions.
+    opened->setInitialZoom();
     opened->goToPage(0);
     syncControls();
     view->setFocus();

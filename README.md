@@ -20,8 +20,9 @@ documents in the same window. Multiple paths per command are supported; quote
 paths containing spaces. Relative paths use the launching terminal?s directory. Instance
 locks are released or recovered after exit or a crash.
 
-Each document opens in its own closable, reorderable tab and retains its scroll position
-and zoom. Select PDFs, EPUBs, and DjVu documents in the open dialog, drop multiple files, or pass
+Each new document opens with its widest page filling 80% of the viewer width,
+in its own closable, reorderable tab that retains its scroll position and zoom.
+Restored documents keep their saved zoom. Select PDFs, EPUBs, and DjVu documents in the open dialog, drop multiple files, or pass
 multiple file paths at startup. Closing the last tab returns to the welcome view.
 Opening a file that is already open switches to its existing tab, preserving its
 position, zoom, and search. Relative paths and symbolic links to the same document

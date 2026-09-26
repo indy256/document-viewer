@@ -21,6 +21,7 @@ public:
     double zoom() const { return scale; }
     Fit fitMode() const { return fit; }
     void setZoom(double value);
+    void setInitialZoom();
     void setFit(Fit mode);
     void goToPage(int page, bool remember = true);
     void goBack();
