@@ -126,6 +126,8 @@ both Windows x64 and ARM64. Linux and macOS continue to use prebuilt Qt kits.
 | --- | --- |
 | Open PDF, EPUB, or DjVu | Open button, Ctrl+O, or drop a local file |
 | Scroll continuously | Mouse wheel, trackpad, scrollbar, Page Up / Page Down |
+| Select text | Drag over text, or double-click a word; drag near an edge to scroll |
+| Copy selected text | Ctrl+C (Command+C on macOS), or right-click → Copy |
 | Zoom | − / + buttons, percentage field, or Ctrl+wheel |
 | Zoom shortcuts | Ctrl+−, Ctrl++, Ctrl+= |
 | Fit width | Toolbar button or Ctrl+0 |
@@ -137,6 +139,11 @@ both Windows x64 and ARM64. Linux and macOS continue to use prebuilt Qt kits.
 | Exit and save session | Escape |
 | Find substring | Find button or Ctrl+F |
 | Next / previous match | Enter or F3 / Shift+F3, or search bar buttons |
+
+Text selection works across pages in PDFs and EPUBs, and selects OCR words in
+DjVu documents. Selections remain highlighted when zooming or switching tabs;
+click elsewhere in the document to clear them. Image-only scans need an existing
+text layer for selection and copying; the app does not perform OCR.
 
 Search is case-insensitive, includes partial words and overlapping matches, and
 wraps at the first/last result.

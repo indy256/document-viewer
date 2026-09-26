@@ -15,6 +15,8 @@
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QClipboard>
+#include <QApplication>
 
 using namespace DJVU;
 
@@ -116,6 +118,28 @@ private slots:
         const auto center = hits.first().first().center();
         QVERIFY(full.pixelColor(qRound(center.x() * extent.width()), qRound(center.y() * extent.height())).lightness() < 80);
         QVERIFY(document.search(0, "absent").isEmpty());
+        const auto text = document.textPage(0);
+        QCOMPARE(text.text, QString("Banana reader"));
+        QCOMPARE(text.spans.size(), 2);
+        PdfView view;
+        view.resize(600, 600);
+        view.show();
+        QVERIFY2(view.open(path, {}, &error), qPrintable(error));
+        view.setFit(PdfView::Fit::Page);
+        const auto size = document.sizes().first() * view.zoom();
+        const auto origin = QPointF((view.viewport()->width() - size.width()) / 2, 24);
+        auto position = [&](int word) {
+            const auto center = text.spans[word].box.center();
+            return (origin + QPointF(center.x() * size.width(), center.y() * size.height())).toPoint();
+        };
+        QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, position(0));
+        QTest::mouseMove(view.viewport(), position(1));
+        QTest::mouseRelease(view.viewport(), Qt::LeftButton, Qt::NoModifier, position(1));
+        QCOMPARE(view.selectedText(), QString("Banana reader"));
+        view.copySelection();
+        QCOMPARE(QApplication::clipboard()->text(), QString("Banana reader"));
+        QTest::mouseDClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, position(1));
+        QCOMPARE(view.selectedText(), QString("reader"));
     }
     void viewerRecoveryAndSession() {
         QTemporaryDir directory;

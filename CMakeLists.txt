@@ -30,6 +30,7 @@ endif()
 
 add_library(viewer_core
     src/pdfview.cpp src/pdfview.h
+    src/pdfselection.cpp src/textpage.h
     src/epub.cpp src/epub.h
     src/djvu.cpp src/djvu.h
     src/window.cpp src/window.h

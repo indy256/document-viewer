@@ -28,6 +28,10 @@
 #include <QStyleOptionSlider>
 #include <QDesktopServices>
 #include <fpdf_doc.h>
+#include <fpdf_text.h>
+#include <QClipboard>
+#include <QContextMenuEvent>
+#include <QMenu>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -61,6 +65,206 @@ private slots:
         QApplication::setFont(QFont(QFontDatabase::applicationFontFamilies(fontId).first(), 10));
     }
     void cleanupTestCase() { FPDF_DestroyLibrary(); }
+    void textSelection_data() {
+        QTest::addColumn<int>("rotation");
+        for (int rotation : {0, 90, 180, 270})
+            QTest::newRow(qPrintable(QString::number(rotation))) << rotation;
+    }
+    void textSelection() {
+        QFETCH(int, rotation);
+        QTemporaryDir directory;
+        const auto path = directory.filePath("selection.pdf");
+        const QByteArray first = "BT /F1 20 Tf 30 310 Td (Alpha beta) Tj 0 -40 Td (Gamma delta) Tj ET";
+        const QByteArray second = "BT /F1 20 Tf 30 310 Td (Second page) Tj ET";
+        const QByteArray page = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /CropBox [10 20 290 380] /Rotate "
+            + QByteArray::number(rotation) + " /Resources << /Font << /F1 5 0 R >> >> /Contents ";
+        const QList<QByteArray> objects = {
+            "<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+            page + "6 0 R >>", page + "7 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            "<< /Length " + QByteArray::number(first.size()) + " >>\nstream\n" + first + "\nendstream",
+            "<< /Length " + QByteArray::number(second.size()) + " >>\nstream\n" + second + "\nendstream"
+        };
+        QByteArray pdf = "%PDF-1.7\n";
+        QList<int> offsets{0};
+        for (int i = 0; i < objects.size(); ++i) {
+            offsets.append(pdf.size());
+            pdf += QByteArray::number(i + 1) + " 0 obj\n" + objects[i] + "\nendobj\n";
+        }
+        const int xref = pdf.size();
+        pdf += "xref\n0 " + QByteArray::number(offsets.size()) + "\n0000000000 65535 f \n";
+        for (int i = 1; i < offsets.size(); ++i)
+            pdf += QByteArray::number(offsets[i]).rightJustified(10, '0') + " 00000 n \n";
+        pdf += "trailer\n<< /Size " + QByteArray::number(offsets.size()) + " /Root 1 0 R >>\nstartxref\n"
+            + QByteArray::number(xref) + "\n%%EOF\n";
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(pdf), pdf.size());
+        file.close();
+        PdfView view;
+        view.resize(700, 650);
+        view.show();
+        QString error;
+        QVERIFY2(view.open(path, {}, &error), qPrintable(error));
+        view.setZoom(1.25);
+        view.goToPage(0);
+        view.activateWindow();
+        view.setFocus();
+        QTRY_VERIFY(view.hasFocus());
+        QTest::qWait(20);
+        auto point = [&](int pageIndex, int character) {
+            auto doc = FPDF_LoadMemDocument64(pdf.constData(), pdf.size(), nullptr);
+            auto page = FPDF_LoadPage(doc, pageIndex);
+            auto text = FPDFText_LoadPage(page);
+            const QString phrase = pageIndex ? "Second page" : "Alpha beta";
+            auto search = FPDFText_FindStart(text, phrase.utf16(), 0, 0);
+            if (FPDFText_FindNext(search)) character += FPDFText_GetSchResultIndex(search);
+            FPDFText_FindClose(search);
+            double left, right, bottom, top;
+            FPDFText_GetCharBox(text, character, &left, &right, &bottom, &top);
+            const double width = FPDF_GetPageWidthF(page) * view.zoom();
+            const double height = FPDF_GetPageHeightF(page) * view.zoom();
+            const QRect rect = QRectF((std::max(double(view.viewport()->width()), width + 48) - width) / 2,
+                24 + pageIndex * (height + 24), width, height).toAlignedRect();
+            int x, y;
+            FPDF_PageToDevice(page, rect.x(), rect.y(), rect.width(), rect.height(), 0,
+                (left + right) / 2, (bottom + top) / 2, &x, &y);
+            FPDFText_ClosePage(text);
+            FPDF_ClosePage(page);
+            FPDF_CloseDocument(doc);
+            return QPoint(x - view.horizontalScrollBar()->value(), y - view.verticalScrollBar()->value());
+        };
+        auto drag = [&](const QPoint &start, const QPoint &end) {
+            QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, start);
+            QTest::mouseMove(view.viewport(), end);
+            QTest::mouseRelease(view.viewport(), Qt::LeftButton, Qt::NoModifier, end);
+        };
+        const auto before = view.viewport()->grab().toImage();
+        drag(point(0, 0), point(0, 9));
+        QCOMPARE(view.selectedText(), QString("Alpha beta"));
+        QVERIFY(view.viewport()->grab().toImage() != before);
+        QApplication::clipboard()->setText("old clipboard");
+        QTest::keySequence(&view, QKeySequence::Copy);
+        QCOMPARE(QApplication::clipboard()->text(), QString("Alpha beta"));
+        drag(point(0, 9), point(0, 0));
+        QCOMPARE(view.selectedText(), QString("Alpha beta"));
+        QTest::mouseDClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, point(0, 7));
+        QCOMPARE(view.selectedText(), QString("beta"));
+        view.setZoom(1.5);
+        QCOMPARE(view.selectedText(), QString("beta"));
+        QVERIFY(!view.open(directory.filePath("missing.pdf"), {}, &error));
+        QCOMPARE(view.selectedText(), QString("beta"));
+        QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(5, 5));
+        QVERIFY(!view.hasSelection());
+        QTest::keySequence(&view, QKeySequence::Copy);
+        QCOMPARE(QApplication::clipboard()->text(), QString("Alpha beta"));
+        if (rotation == 0) {
+            view.goToPage(0);
+            QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, point(0, 0));
+            view.goToPage(1);
+            QTest::mouseMove(view.viewport(), point(1, 10));
+            QTest::mouseRelease(view.viewport(), Qt::LeftButton, Qt::NoModifier, point(1, 10));
+            QCOMPARE(view.selectedText().simplified(), QString("Alpha beta Gamma delta Second page"));
+        }
+        QVERIFY(view.open(path, {}, &error));
+        QVERIFY(!view.hasSelection());
+        view.setZoom(1.25);
+        view.goToPage(0);
+        QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, point(0, 0));
+        const QPoint edge(view.viewport()->width() / 2, view.viewport()->height() - 1);
+        QTest::mouseMove(view.viewport(), edge);
+        const auto scrollBefore = view.verticalScrollBar()->value();
+        QTRY_VERIFY(view.verticalScrollBar()->value() > scrollBefore);
+        QTest::mouseRelease(view.viewport(), Qt::LeftButton, Qt::NoModifier, edge);
+        const auto scrollAfter = view.verticalScrollBar()->value();
+        QTest::qWait(100);
+        QCOMPARE(view.verticalScrollBar()->value(), scrollAfter);
+    }
+    void copyFormats_data() {
+        QTest::addColumn<bool>("epub");
+        QTest::newRow("PDF Unicode") << false;
+        QTest::newRow("EPUB link text") << true;
+    }
+    void copyFormats() {
+        QFETCH(bool, epub);
+        QTemporaryDir directory;
+        const auto path = directory.filePath(epub ? "copy.epub" : "copy.pdf");
+        const QString expected = epub ? QString("Next chapter") : QString::fromUtf8("caf\xc3\xa9 \xd0\x9f\xd1\x80\xd0\xb8\xd0\xb2\xd0\xb5\xd1\x82");
+        QByteArray pdf;
+        QString error;
+        if (epub) {
+            makeBook(path, false, "3.0");
+            pdf = renderEpub(path, &error);
+        } else {
+            {
+                QPdfWriter writer(path);
+                writer.setResolution(72);
+                QPainter painter(&writer);
+                painter.setFont(QFont(QApplication::font().family(), 20));
+                painter.drawText(50, 100, expected);
+            }
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            pdf = file.readAll();
+        }
+        Window window;
+        window.show();
+        QVERIFY(window.openDocument(path));
+        auto view = qobject_cast<PdfView *>(window.findChild<QTabWidget *>()->currentWidget());
+        window.activateWindow();
+        view->setFocus();
+        QTRY_VERIFY(view->hasFocus());
+        QTest::qWait(20);
+        auto doc = FPDF_LoadMemDocument64(pdf.constData(), pdf.size(), nullptr);
+        QVERIFY(doc);
+        auto page = FPDF_LoadPage(doc, 0);
+        auto text = FPDFText_LoadPage(page);
+        auto search = FPDFText_FindStart(text, expected.utf16(), 0, 0);
+        QVERIFY(FPDFText_FindNext(search));
+        const int start = FPDFText_GetSchResultIndex(search);
+        const int end = start + FPDFText_GetSchCount(search) - 1;
+        auto position = [&](int character) {
+            double left, right, bottom, top;
+            FPDFText_GetCharBox(text, character, &left, &right, &bottom, &top);
+            const double width = FPDF_GetPageWidthF(page) * view->zoom();
+            const double height = FPDF_GetPageHeightF(page) * view->zoom();
+            const QRect rect = QRectF((view->viewport()->width() - width) / 2, 24, width, height).toAlignedRect();
+            int x, y;
+            FPDF_PageToDevice(page, rect.x(), rect.y(), rect.width(), rect.height(), 0,
+                (left + right) / 2, (bottom + top) / 2, &x, &y);
+            return QPoint(x, y);
+        };
+        const auto first = position(start), last = position(end);
+        FPDFText_FindClose(search);
+        FPDFText_ClosePage(text);
+        FPDF_ClosePage(page);
+        FPDF_CloseDocument(doc);
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, first);
+        QTest::mouseMove(view->viewport(), last);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, last);
+        QCOMPARE(view->selectedText(), expected);
+        QCOMPARE(view->currentPage(), 0); // Dragging linked text must not follow its link.
+        QApplication::clipboard()->setText("old clipboard");
+        QTimer::singleShot(0, &window, [] {
+            auto menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+            QVERIFY(menu);
+            const auto copy = menu->actions().first();
+            QCOMPARE(copy->text(), QString("Copy"));
+            QVERIFY(copy->isEnabled());
+            menu->setActiveAction(copy);
+            QTest::keyClick(menu, Qt::Key_Return);
+        });
+        QContextMenuEvent context(QContextMenuEvent::Mouse, first, view->viewport()->mapToGlobal(first));
+        QApplication::sendEvent(view->viewport(), &context);
+        QCOMPARE(QApplication::clipboard()->text(), expected);
+        // Document Copy must not consume shortcuts from editable toolbar fields.
+        const auto field = window.findChild<QComboBox *>()->lineEdit();
+        QVERIFY(field);
+        field->setText("75%");
+        field->setFocus();
+        field->selectAll();
+        QTest::keySequence(field, QKeySequence::Copy);
+        QCOMPARE(QApplication::clipboard()->text(), QString("75%"));
+    }
     void navigationHistory() {
         QTemporaryDir directory;
         const auto path = directory.filePath("history.pdf");

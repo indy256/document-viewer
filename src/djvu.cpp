@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QThread>
 #include <functional>
+#include <algorithm>
 
 struct DjvuDocument::Impl {
     ddjvu_context_t *context = ddjvu_context_create("DocumentViewer");
@@ -140,16 +141,14 @@ QImage DjvuDocument::render(int page, const QSize &fullSize, const QRect &tile) 
     return ok ? image : QImage();
 }
 
-QVector<QVector<QRectF>> DjvuDocument::search(int page, const QString &query) {
-    QVector<QVector<QRectF>> matches;
-    if (query.isEmpty() || !impl->loadPage(page)) return matches;
+TextPage DjvuDocument::textPage(int page) {
+    TextPage result;
+    if (!impl->loadPage(page)) return result;
     miniexp_t expression = miniexp_dummy;
     if (!impl->wait([&] {
         expression = ddjvu_document_get_pagetext(impl->document, page, "word");
         return expression != miniexp_dummy;
-    })) return matches;
-    QString text;
-    QVector<QRectF> boxes;
+    })) return result;
     const double width = ddjvu_page_get_width(impl->page);
     const double height = ddjvu_page_get_height(impl->page);
     const int rotation = ddjvu_page_get_rotation(impl->page);
@@ -171,19 +170,29 @@ QVector<QVector<QRectF>> DjvuDocument::search(int page, const QString &query) {
         const auto tail = miniexp_nth(5, node);
         if (miniexp_stringp(tail)) {
             const auto word = QString::fromUtf8(miniexp_to_str(tail));
-            if (!text.isEmpty()) { text += ' '; boxes.append(QRectF()); }
-            text += word;
-            for (qsizetype i = 0; i < word.size(); ++i) boxes.append(box);
+            if (!result.text.isEmpty()) result.text += ' ';
+            result.spans.append({result.text.size(), word.size(), box});
+            result.text += word;
             return;
         }
         for (int i = 5; i < miniexp_length(node); ++i) visit(miniexp_nth(i, node), depth + 1);
     };
     visit(expression, 0);
     ddjvu_miniexp_release(impl->document, expression);
+    return result;
+}
+
+QVector<QVector<QRectF>> DjvuDocument::search(int page, const QString &query) {
+    QVector<QVector<QRectF>> matches;
+    if (query.isEmpty()) return matches;
+    const auto content = textPage(page);
+    const auto &text = content.text;
     for (qsizetype start = 0; (start = text.indexOf(query, start, Qt::CaseInsensitive)) >= 0; ++start) {
         QVector<QRectF> rectangles;
-        for (qsizetype i = start; i < start + query.size(); ++i)
-            if (!boxes[i].isEmpty() && !rectangles.contains(boxes[i])) rectangles.append(boxes[i]);
+        auto span = std::lower_bound(content.spans.cbegin(), content.spans.cend(), start,
+            [](const TextSpan &span, qsizetype position) { return span.start + span.length <= position; });
+        for (; span != content.spans.cend() && span->start < start + query.size(); ++span)
+            if (!span->box.isEmpty() && !rectangles.contains(span->box)) rectangles.append(span->box);
         matches.append(rectangles);
     }
     return matches;

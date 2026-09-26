@@ -11,6 +11,8 @@
 #include <QMouseEvent>
 #include <QDesktopServices>
 #include <QCursor>
+#include <QAction>
+#include <QPainterPath>
 #include <algorithm>
 #include <cmath>
 
@@ -22,6 +24,22 @@ PdfView::PdfView(QWidget *parent) : QAbstractScrollArea(parent) {
     viewport()->setAutoFillBackground(false);
     viewport()->setMouseTracking(true);
     connect(&searchTimer, &QTimer::timeout, this, &PdfView::searchPage);
+    auto copy = new QAction("Copy", this);
+    copy->setShortcuts(QKeySequence::Copy);
+    copy->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    addAction(copy);
+    connect(copy, &QAction::triggered, this, &PdfView::copySelection);
+    selectionScrollTimer.setInterval(40);
+    connect(&selectionScrollTimer, &QTimer::timeout, this, [this] {
+        auto scroll = [](QScrollBar *bar, int position, int extent) {
+            const int delta = position < 16 ? position - 16
+                : position > extent - 16 ? position - extent + 16 : 0;
+            bar->setValue(bar->value() + std::clamp(delta, -40, 40));
+        };
+        scroll(horizontalScrollBar(), selectionPointer.x(), viewport()->width());
+        scroll(verticalScrollBar(), selectionPointer.y(), viewport()->height());
+        extendSelection();
+    });
 }
 
 PdfView::~PdfView() {
@@ -78,6 +96,8 @@ bool PdfView::open(const QString &path, const QString &password, QString *error)
         *error = QStringLiteral("This PDF has no pages.");
         return false;
     }
+    clearSelection();
+    textCache.clear();
     if (document) FPDF_CloseDocument(document);
     document = next;
     djvu = std::move(nextDjvu);
@@ -395,14 +415,36 @@ void PdfView::followLink(const LinkTarget &target) {
 
 void PdfView::updateLinkCursor() {
     const auto point = viewport()->mapFromGlobal(QCursor::pos());
-    viewport()->setCursor(viewport()->rect().contains(point) && linkAt(point).valid()
-        ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    if (selecting && selectionVisible) viewport()->setCursor(Qt::IBeamCursor);
+    else if (!viewport()->rect().contains(point)) viewport()->unsetCursor();
+    else viewport()->setCursor(linkAt(point).valid() ? Qt::PointingHandCursor
+        : textAt(point).valid() ? Qt::IBeamCursor : Qt::ArrowCursor);
+}
+
+void PdfView::hideEvent(QHideEvent *event) {
+    selectionScrollTimer.stop();
+    selecting = false;
+    pressedLink = {};
+    QAbstractScrollArea::hideEvent(event);
 }
 
 void PdfView::mouseMoveEvent(QMouseEvent *event) {
-    if ((event->position().toPoint() - pressPosition).manhattanLength() > QApplication::startDragDistance())
+    selectionPointer = event->position().toPoint();
+    if ((selectionPointer - pressPosition).manhattanLength() > QApplication::startDragDistance()) {
         pressedLink = {};
-    viewport()->setCursor(linkAt(event->position().toPoint()).valid() ? Qt::PointingHandCursor : Qt::ArrowCursor);
+        if (selecting) {
+            selectionVisible = true;
+            selectionScrollTimer.start();
+        }
+    }
+    if (selecting && selectionVisible) {
+        extendSelection();
+        viewport()->setCursor(Qt::IBeamCursor);
+        event->accept();
+        return;
+    }
+    viewport()->setCursor(linkAt(selectionPointer).valid() ? Qt::PointingHandCursor
+        : textAt(selectionPointer).valid() ? Qt::IBeamCursor : Qt::ArrowCursor);
     QAbstractScrollArea::mouseMoveEvent(event);
 }
 
@@ -414,14 +456,28 @@ void PdfView::mousePressEvent(QMouseEvent *event) {
         return;
     }
     if (event->button() == Qt::LeftButton) {
+        clearSelection();
+        setFocus(Qt::MouseFocusReason);
         pressPosition = event->position().toPoint();
+        selectionPointer = pressPosition;
+        selectionAnchor = selectionEnd = textAt(pressPosition);
+        selecting = selectionAnchor.valid();
         pressedLink = linkAt(pressPosition);
-        if (pressedLink.valid()) { setFocus(Qt::MouseFocusReason); event->accept(); return; }
+        event->accept();
+        return;
     }
     QAbstractScrollArea::mousePressEvent(event);
 }
 
 void PdfView::mouseReleaseEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        selectionScrollTimer.stop();
+        if (selecting && selectionVisible) {
+            selectionPointer = event->position().toPoint();
+            extendSelection();
+        }
+        selecting = false;
+    }
     const auto target = pressedLink;
     pressedLink = {};
     if (event->button() == Qt::LeftButton && target.valid()
@@ -432,6 +488,7 @@ void PdfView::mouseReleaseEvent(QMouseEvent *event) {
         event->accept();
         return;
     }
+    if (event->button() == Qt::LeftButton) { event->accept(); return; }
     QAbstractScrollArea::mouseReleaseEvent(event);
 }
 
@@ -498,6 +555,19 @@ void PdfView::paintEvent(QPaintEvent *) {
             painter.setPen(QColor("#66758c"));
             painter.drawText(rect.intersected(viewport()->rect()), Qt::AlignCenter,
                 "This DjVu page could not be rendered.");
+        }
+        if (selectionVisible && i >= std::min(selectionAnchor.page, selectionEnd.page)
+            && i <= std::max(selectionAnchor.page, selectionEnd.page)) {
+            auto content = textPage(i);
+            const auto range = selectionRange(i, int(content->spans.size()));
+            QPainterPath highlight;
+            highlight.setFillRule(Qt::WindingFill);
+            for (int c = range.first; c < range.second; ++c) {
+                const auto &box = content->spans[c].box;
+                highlight.addRect(QRectF(rect.x() + box.x() * rect.width(), rect.y() + box.y() * rect.height(),
+                    box.width() * rect.width(), box.height() * rect.height()));
+            }
+            painter.fillPath(highlight, QColor(45, 120, 230, 95));
         }
         for (int m = 0; m < matches.size(); ++m) {
             const auto &match = matches[m];

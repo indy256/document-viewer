@@ -31,6 +31,9 @@ public:
     int matchCount() const { return matches.size(); }
     int currentMatch() const { return selectedMatch; }
     bool isSearching() const { return searchTimer.isActive(); }
+    bool hasSelection() const { return selectionVisible; }
+    QString selectedText();
+    void copySelection();
 signals:
     void pageChanged(int page);
     void zoomChanged(double zoom);
@@ -38,10 +41,12 @@ signals:
 protected:
     void paintEvent(QPaintEvent *) override;
     void resizeEvent(QResizeEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
     void scrollContentsBy(int, int) override;
 private:
     struct NavigationPosition {
@@ -78,6 +83,25 @@ private:
     void activateLink(const LinkTarget &target);
     void followLink(const LinkTarget &target);
     void updateLinkCursor();
+    struct TextPosition {
+        int page = -1;
+        int span = -1;
+        bool valid() const { return page >= 0 && span >= 0; }
+        bool operator<(const TextPosition &other) const {
+            return page < other.page || (page == other.page && span < other.span);
+        }
+    };
+    TextPage *textPage(int page);
+    TextPosition textAt(const QPoint &position, bool nearest = false);
+    QPair<int, int> selectionRange(int page, int count) const;
+    void clearSelection();
+    void extendSelection();
+    QCache<int, TextPage> textCache{8192}; // KiB, independent of render/zoom cache.
+    TextPosition selectionAnchor, selectionEnd;
+    bool selecting = false;
+    bool selectionVisible = false;
+    QPoint selectionPointer;
+    QTimer selectionScrollTimer;
     LinkTarget pressedLink;
     QPoint pressPosition;
     EpubDestinations epubDestinations;

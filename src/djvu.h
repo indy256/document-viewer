@@ -4,6 +4,7 @@
 #include <QString>
 #include <QVector>
 #include <memory>
+#include "textpage.h"
 
 class DjvuDocument {
 public:
@@ -13,6 +14,7 @@ public:
     QVector<QSizeF> sizes() const;
     QImage render(int page, const QSize &fullSize, const QRect &tile);
     QVector<QVector<QRectF>> search(int page, const QString &query);
+    TextPage textPage(int page);
 private:
     struct Impl;
     std::unique_ptr<Impl> impl;

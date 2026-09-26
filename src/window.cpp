@@ -76,10 +76,15 @@ Window::Window(const QString &sessionFile, int autosaveIntervalMs)
 
 void Window::contextMenuEvent(QContextMenuEvent *event) {
     QMenu menu(this);
+    auto copy = menu.addAction("Copy");
+    copy->setShortcut(QKeySequence::Copy);
+    copy->setEnabled(view && view->hasSelection());
+    menu.addSeparator();
     auto registration = menu.addAction("Register file types");
     auto update = menu.addAction("Update to latest version");
     const auto selected = menu.exec(event->globalPos());
     event->accept();
+    if (selected == copy && view) view->copySelection();
     if (selected == registration) {
         const auto error = registerDocumentFileTypes();
         if (!error.isEmpty()) QMessageBox::warning(this, "Register file types", error);
