@@ -130,7 +130,7 @@ both Windows x64 and ARM64. Linux and macOS continue to use prebuilt Qt kits.
 | Copy selected text | Ctrl+C (Command+C on macOS), or right-click → Copy |
 | Zoom | − / + buttons, percentage field, or Ctrl+wheel |
 | Zoom shortcuts | Ctrl+−, Ctrl++, Ctrl+= |
-| Fit width | Toolbar button or Ctrl+0 |
+| Fit width | Zoom dropdown or Ctrl+0 |
 | Fit page | Zoom dropdown |
 | Navigate pages | Page number, arrow buttons, or document links |
 | Back / Forward in history | Mouse Back / Forward buttons, Alt+Left / Alt+Right, or Back / Forward keys |

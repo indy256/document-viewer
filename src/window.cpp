@@ -201,8 +201,9 @@ void Window::setupToolbars() {
     auto plus = toolbar->addAction("+");
     plus->setToolTip("Zoom in (Ctrl++)");
     plus->setShortcuts({QKeySequence("Ctrl++"), QKeySequence("Ctrl+=" )});
-    auto fitWidth = toolbar->addAction("Fit width");
+    auto fitWidth = new QAction("Fit width", this);
     fitWidth->setShortcut(QKeySequence("Ctrl+0"));
+    addAction(fitWidth);
     connect(previous, &QAction::triggered, this, [this] { view->goToPage(view->currentPage() - 1); });
     connect(next, &QAction::triggered, this, [this] { view->goToPage(view->currentPage() + 1); });
     connect(page, &QSpinBox::valueChanged, this, [this](int n) { view->goToPage(n - 1); });
