@@ -112,6 +112,7 @@ QPair<int, int> PdfView::selectionRange(int page, int count) const {
 }
 
 void PdfView::clearSelection() {
+    scrollDragPending = scrollDragging = false;
     selectionScrollTimer.stop();
     selecting = selectionVisible = false;
     selectionAnchor = selectionEnd = {};

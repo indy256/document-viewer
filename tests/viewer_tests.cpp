@@ -66,6 +66,57 @@ private slots:
         QApplication::setFont(QFont(QFontDatabase::applicationFontFamilies(fontId).first(), 10));
     }
     void cleanupTestCase() { FPDF_DestroyLibrary(); }
+    void documentDragScrolling() {
+        QTemporaryDir directory;
+        const auto path = directory.filePath("drag.pdf");
+        {
+            QPdfWriter writer(path);
+            QPainter painter(&writer);
+            painter.fillRect(QRect(0, 0, 100, 100), Qt::red);
+        }
+        PdfView view;
+        view.resize(700, 450);
+        view.show();
+        QString error;
+        QVERIFY2(view.open(path, {}, &error), qPrintable(error));
+        view.setZoom(1.0);
+        QTest::qWait(20);
+        auto bar = view.verticalScrollBar();
+        QVERIFY(bar->maximum() > 200);
+        bar->setValue(0);
+        const QPoint start(view.viewport()->width() / 2, 250);
+        QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(view.viewport(), start - QPoint(0, 2));
+        QCOMPARE(bar->value(), 0);
+        QTest::mouseMove(view.viewport(), start + QPoint(30, -100));
+        QCOMPARE(bar->value(), 100);
+        QCOMPARE(view.horizontalScrollBar()->value(), 0);
+        QCOMPARE(view.viewport()->cursor().shape(), Qt::ClosedHandCursor);
+        QVERIFY(!view.hasSelection());
+        QTest::mouseMove(view.viewport(), start - QPoint(0, 40));
+        QCOMPARE(bar->value(), 40);
+        QTest::mouseRelease(view.viewport(), Qt::LeftButton, Qt::NoModifier, start - QPoint(0, 40));
+        QVERIFY(view.viewport()->cursor().shape() != Qt::ClosedHandCursor);
+        QTest::mouseMove(view.viewport(), start);
+        QCOMPARE(bar->value(), 40);
+
+        // Background margins and right-button drags must not pan the document.
+        for (const auto button : {Qt::LeftButton, Qt::RightButton}) {
+            const QPoint origin = button == Qt::LeftButton ? QPoint(5, 250) : start;
+            QTest::mousePress(view.viewport(), button, Qt::NoModifier, origin);
+            QTest::mouseMove(view.viewport(), origin - QPoint(0, 80));
+            QTest::mouseRelease(view.viewport(), button, Qt::NoModifier, origin - QPoint(0, 80));
+            QCOMPARE(bar->value(), 40);
+        }
+        QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, start);
+        QTest::mouseMove(view.viewport(), start - QPoint(0, 80));
+        QCOMPARE(bar->value(), 120);
+        view.hide();
+        view.show();
+        QTest::mouseMove(view.viewport(), start);
+        QCOMPARE(bar->value(), 120);
+        QTest::mouseRelease(view.viewport(), Qt::LeftButton, Qt::NoModifier, start);
+    }
     void textSelection_data() {
         QTest::addColumn<int>("rotation");
         for (int rotation : {0, 90, 180, 270})

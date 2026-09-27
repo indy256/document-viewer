@@ -434,13 +434,16 @@ void PdfView::followLink(const LinkTarget &target) {
 
 void PdfView::updateLinkCursor() {
     const auto point = viewport()->mapFromGlobal(QCursor::pos());
-    if (selecting && selectionVisible) viewport()->setCursor(Qt::IBeamCursor);
+    if (scrollDragging) viewport()->setCursor(Qt::ClosedHandCursor);
+    else if (selecting && selectionVisible) viewport()->setCursor(Qt::IBeamCursor);
     else if (!viewport()->rect().contains(point)) viewport()->unsetCursor();
     else viewport()->setCursor(linkAt(point).valid() ? Qt::PointingHandCursor
         : textAt(point).valid() ? Qt::IBeamCursor : Qt::ArrowCursor);
 }
 
 void PdfView::hideEvent(QHideEvent *event) {
+    scrollDragPending = scrollDragging = false;
+    viewport()->unsetCursor();
     selectionScrollTimer.stop();
     selecting = false;
     pressedLink = {};
@@ -449,6 +452,16 @@ void PdfView::hideEvent(QHideEvent *event) {
 
 void PdfView::mouseMoveEvent(QMouseEvent *event) {
     selectionPointer = event->position().toPoint();
+    if (scrollDragPending) {
+        if (qAbs(selectionPointer.y() - pressPosition.y()) > QApplication::startDragDistance())
+            scrollDragging = true;
+        if (scrollDragging) {
+            verticalScrollBar()->setValue(scrollDragStart + pressPosition.y() - selectionPointer.y());
+            viewport()->setCursor(Qt::ClosedHandCursor);
+        }
+        event->accept();
+        return;
+    }
     if ((selectionPointer - pressPosition).manhattanLength() > QApplication::startDragDistance()) {
         pressedLink = {};
         if (selecting) {
@@ -482,6 +495,13 @@ void PdfView::mousePressEvent(QMouseEvent *event) {
         selectionAnchor = selectionEnd = textAt(pressPosition);
         selecting = selectionAnchor.valid();
         pressedLink = linkAt(pressPosition);
+        const QPoint documentPoint = pressPosition
+            + QPoint(horizontalScrollBar()->value(), verticalScrollBar()->value());
+        scrollDragPending = !selecting && !pressedLink.valid()
+            && std::any_of(pages.cbegin(), pages.cend(), [&](const QRectF &page) {
+                return page.contains(documentPoint);
+            });
+        scrollDragStart = verticalScrollBar()->value();
         event->accept();
         return;
     }
@@ -490,6 +510,9 @@ void PdfView::mousePressEvent(QMouseEvent *event) {
 
 void PdfView::mouseReleaseEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
+        const bool wasScrollDragging = scrollDragging;
+        scrollDragPending = scrollDragging = false;
+        if (wasScrollDragging) updateLinkCursor();
         selectionScrollTimer.stop();
         if (selecting && selectionVisible) {
             selectionPointer = event->position().toPoint();

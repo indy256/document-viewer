@@ -105,6 +105,9 @@ private:
     QTimer selectionScrollTimer;
     LinkTarget pressedLink;
     QPoint pressPosition;
+    bool scrollDragPending = false;
+    bool scrollDragging = false;
+    int scrollDragStart = 0;
     EpubDestinations epubDestinations;
     struct Match { int page; QVector<QRectF> rectangles; }; // Normalized display coordinates.
     QVector<Match> matches;
