@@ -32,12 +32,41 @@ TextPage *PdfView::textPage(int index) {
                 content->spans.append({content->text.size(), character.size(), box});
                 content->text += character;
             }
+            auto links = FPDFLink_LoadWebLinks(text);
+            if (links) {
+                for (int i = 0; i < FPDFLink_CountWebLinks(links); ++i) {
+                    const int length = FPDFLink_GetURL(links, i, nullptr, 0);
+                    if (length <= 1 || length > 1024 * 1024) continue;
+                    QVector<unsigned short> buffer(length);
+                    const int copied = FPDFLink_GetURL(links, i, buffer.data(), length);
+                    if (copied <= 1 || copied > length) continue;
+                    const QUrl url(QString::fromUtf16(buffer.constData(), copied - 1), QUrl::StrictMode);
+                    if (!url.isValid() || !(((url.scheme() == "http" || url.scheme() == "https")
+                        && !url.host().isEmpty()) || (url.scheme() == "mailto" && !url.path().isEmpty()))) continue;
+                    TextLink link{url, {}};
+                    for (int r = 0; r < FPDFLink_CountRects(links, i); ++r) {
+                        double left, top, right, bottom;
+                        int x1, y1, x2, y2;
+                        constexpr int extent = 1000000;
+                        if (FPDFLink_GetRect(links, i, r, &left, &top, &right, &bottom)
+                            && FPDF_PageToDevice(page, 0, 0, extent, extent, 0, left, top, &x1, &y1)
+                            && FPDF_PageToDevice(page, 0, 0, extent, extent, 0, right, bottom, &x2, &y2)) {
+                            link.boxes.append(QRectF(QPointF(double(x1) / extent, double(y1) / extent),
+                                QPointF(double(x2) / extent, double(y2) / extent)).normalized());
+                        }
+                    }
+                    if (!link.boxes.isEmpty()) content->links.append(std::move(link));
+                }
+                FPDFLink_CloseWebLinks(links);
+            }
             FPDFText_ClosePage(text);
         }
         if (page) FPDF_ClosePage(page);
     }
-    const auto cost = int(std::min<qsizetype>(8192,
-        1 + (content->text.size() * sizeof(QChar) + content->spans.size() * sizeof(TextSpan)) / 1024));
+    qsizetype bytes = content->text.size() * sizeof(QChar) + content->spans.size() * sizeof(TextSpan);
+    for (const auto &link : content->links)
+        bytes += sizeof(TextLink) + link.url.toEncoded().size() + link.boxes.size() * sizeof(QRectF);
+    const auto cost = int(std::min<qsizetype>(8192, 1 + bytes / 1024));
     auto result = content.release();
     textCache.insert(index, result, cost);
     return result;

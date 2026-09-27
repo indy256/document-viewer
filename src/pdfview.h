@@ -80,7 +80,7 @@ private:
                 && hasY == other.hasY && zoom == other.zoom && url == other.url;
         }
     };
-    LinkTarget linkAt(const QPoint &position) const;
+    LinkTarget linkAt(const QPoint &position);
     void activateLink(const LinkTarget &target);
     void followLink(const LinkTarget &target);
     void updateLinkCursor();

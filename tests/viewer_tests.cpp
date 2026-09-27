@@ -32,6 +32,7 @@
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QMenu>
+#include <QScopeGuard>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -419,6 +420,85 @@ private slots:
         QCOMPARE(receiver.received, QUrl("https://example.com/read?q=1#part"));
         QTest::mouseMove(view.viewport(), point(420));
         QCOMPARE(view.viewport()->cursor().shape(), Qt::ArrowCursor);
+    }
+    void plainTextLinks_data() {
+        QTest::addColumn<QString>("printed");
+        QTest::addColumn<QUrl>("expected");
+        QTest::newRow("https") << QString("https://example.com/read?q=1#part") << QUrl("https://example.com/read?q=1#part");
+        QTest::newRow("http") << QString("http://example.com/read") << QUrl("http://example.com/read");
+        QTest::newRow("www") << QString("www.example.com/read") << QUrl("http://www.example.com/read");
+        QTest::newRow("email") << QString("reader@example.com") << QUrl("mailto:reader@example.com");
+    }
+    void plainTextLinks() {
+        QFETCH(QString, printed);
+        QFETCH(QUrl, expected);
+        QTemporaryDir directory;
+        const auto path = directory.filePath("plain-link.pdf");
+        {
+            QPdfWriter writer(path);
+            writer.setResolution(72);
+            QPainter painter(&writer);
+            painter.setFont(QFont(QApplication::font().family(), 14));
+            painter.drawText(40, 250, "See (" + printed + ").");
+        }
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const auto pdf = file.readAll();
+        auto doc = FPDF_LoadMemDocument64(pdf.constData(), pdf.size(), nullptr);
+        QVERIFY(doc);
+        const auto closeDoc = qScopeGuard([&] { FPDF_CloseDocument(doc); });
+        auto page = FPDF_LoadPage(doc, 0);
+        QVERIFY(page);
+        const auto closePage = qScopeGuard([&] { FPDF_ClosePage(page); });
+        auto text = FPDFText_LoadPage(page);
+        QVERIFY(text);
+        const auto closeText = qScopeGuard([&] { FPDFText_ClosePage(text); });
+        auto search = FPDFText_FindStart(text, printed.utf16(), 0, 0);
+        QVERIFY(search);
+        const auto closeSearch = qScopeGuard([&] { FPDFText_FindClose(search); });
+        QVERIFY(FPDFText_FindNext(search));
+        const int start = FPDFText_GetSchResultIndex(search);
+        const int end = start + FPDFText_GetSchCount(search) - 1;
+        PdfView view;
+        view.resize(800, 600);
+        view.show();
+        QString error;
+        QVERIFY2(view.open(path, {}, &error), qPrintable(error));
+        QTest::qWait(20);
+        UrlReceiver receiver;
+        QDesktopServices::setUrlHandler(expected.scheme(), &receiver, "open");
+        const auto resetHandler = qScopeGuard([&] { QDesktopServices::unsetUrlHandler(expected.scheme()); });
+        for (double zoom : {0.8, 1.5}) {
+            view.setZoom(zoom);
+            view.horizontalScrollBar()->setValue(30);
+            view.verticalScrollBar()->setValue(80);
+            auto position = [&](int character) {
+                double left, right, bottom, top;
+                FPDFText_GetCharBox(text, character, &left, &right, &bottom, &top);
+                const double width = FPDF_GetPageWidthF(page) * zoom;
+                const double height = FPDF_GetPageHeightF(page) * zoom;
+                const QRect rect = QRectF((std::max(double(view.viewport()->width()), width + 48) - width) / 2,
+                    24, width, height).toAlignedRect();
+                int x, y;
+                FPDF_PageToDevice(page, rect.x(), rect.y(), rect.width(), rect.height(), 0,
+                    (left + right) / 2, (bottom + top) / 2, &x, &y);
+                return QPoint(x - view.horizontalScrollBar()->value(), y - view.verticalScrollBar()->value());
+            };
+            const auto first = position(start), last = position(end);
+            QTest::mouseMove(view.viewport(), first);
+            QCOMPARE(view.viewport()->cursor().shape(), Qt::PointingHandCursor);
+            receiver.received = {};
+            QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, first);
+            QCOMPARE(receiver.received, expected);
+            receiver.received = {};
+            QTest::mouseClick(view.viewport(), Qt::RightButton, Qt::NoModifier, first);
+            QVERIFY(receiver.received.isEmpty());
+            QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, first);
+            QTest::mouseMove(view.viewport(), last);
+            QTest::mouseRelease(view.viewport(), Qt::LeftButton, Qt::NoModifier, last);
+            QVERIFY(receiver.received.isEmpty());
+            QCOMPARE(view.selectedText(), printed);
+        }
     }
     void epubLinks() {
         QTemporaryDir directory;

@@ -77,6 +77,8 @@ history of link, page, and search jumps, including position and zoom. Scrolling
 does not add history entries; a new jump after going back clears forward history.
 History lasts until the document is closed.
 Web and email links open in the system's default browser or mail application.
+PDFs and EPUBs also recognize web addresses and email addresses printed as plain
+text, even when the document has no link annotation.
 Supported links show a hand cursor; dragging across a link does not activate it.
 PDF launch actions, links to other local files, and script links are not executed.
 

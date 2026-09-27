@@ -328,7 +328,7 @@ void PdfView::scrollContentsBy(int, int) {
     emit pageChanged(currentPage());
 }
 
-PdfView::LinkTarget PdfView::linkAt(const QPoint &position) const {
+PdfView::LinkTarget PdfView::linkAt(const QPoint &position) {
     if (!document) return {};
     const QPoint offset(horizontalScrollBar()->value(), verticalScrollBar()->value());
     for (int i = 0; i < pages.size(); ++i) {
@@ -375,6 +375,18 @@ PdfView::LinkTarget PdfView::linkAt(const QPoint &position) const {
             }
         }
         FPDF_ClosePage(page);
+        // Explicit annotations take precedence, including unsupported actions.
+        // Otherwise recognize URLs printed as ordinary text on the page.
+        if (!link) {
+            const QPointF normalized(double(position.x() - rect.x()) / rect.width(),
+                                     double(position.y() - rect.y()) / rect.height());
+            const auto content = textPage(i);
+            for (const auto &detected : content->links) {
+                for (const auto &box : detected.boxes) {
+                    if (box.contains(normalized)) { result.url = detected.url; return result; }
+                }
+            }
+        }
         return result;
     }
     return {};
