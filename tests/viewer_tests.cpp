@@ -487,10 +487,10 @@ private slots:
             const auto first = position(start), last = position(end);
             QTest::mouseMove(view.viewport(), first);
             QCOMPARE(view.viewport()->cursor().shape(), Qt::PointingHandCursor);
-            receiver.received = {};
+            receiver.received = QUrl();
             QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, first);
             QCOMPARE(receiver.received, expected);
-            receiver.received = {};
+            receiver.received = QUrl();
             QTest::mouseClick(view.viewport(), Qt::RightButton, Qt::NoModifier, first);
             QVERIFY(receiver.received.isEmpty());
             QTest::mousePress(view.viewport(), Qt::LeftButton, Qt::NoModifier, first);
