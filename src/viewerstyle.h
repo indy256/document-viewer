@@ -1,4 +1,6 @@
 #pragma once
+#include <QPainter>
+#include <QPainterPath>
 #include <QProxyStyle>
 #include <QStyleOptionSlider>
 #include <QWidget>
@@ -18,21 +20,32 @@ public:
             return;
         }
 
-        const auto drawPart = [&](SubControls controls, const QPalette &palette) {
-            QStyleOptionSlider part(*slider);
-            part.subControls &= controls;
-            part.palette = palette;
-            QProxyStyle::drawComplexControl(control, &part, painter, widget);
-        };
+        // Paint the groove first and the arrow buttons over the handle at the ends.
+        QStyleOptionSlider part(*slider);
+        part.subControls &= SC_ScrollBarGroove;
+        QProxyStyle::drawComplexControl(control, &part, painter, widget);
 
-        QPalette handlePalette = slider->palette;
-        handlePalette.setColor(QPalette::Button, QColor("#3f444b"));
-        handlePalette.setColor(QPalette::Window, QColor("#292c31")); // Fusion's outline
+        QColor handleColor("#50555c");
+        if (slider->activeSubControls.testFlag(SC_ScrollBarSlider)) {
+            if (slider->state.testFlag(State_Sunken)) handleColor = handleColor.lighter(112);
+            else if (slider->state.testFlag(State_MouseOver)) handleColor = handleColor.lighter(108);
+        }
 
-        // Keep Fusion's paint order where the handle meets the arrow buttons.
-        drawPart(SC_ScrollBarGroove, slider->palette);
-        drawPart(SC_ScrollBarSlider, handlePalette);
-        drawPart(~(SC_ScrollBarGroove | SC_ScrollBarSlider), slider->palette);
+        const QRect sliderRect = subControlRect(control, slider, SC_ScrollBarSlider, widget);
+        const qreal handleWidth = sliderRect.width() * 0.81;
+        const qreal left = sliderRect.x() + (sliderRect.width() - handleWidth) / 2 + 1;
+        // Match Fusion's painted length, including one pixel past each end.
+        const QRectF handle(left, sliderRect.y() - 1, handleWidth, sliderRect.height() + 2);
+        QPainterPath roundedHandle;
+        roundedHandle.addRoundedRect(handle.adjusted(-1, -1, 1, 1), 7, 7);
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing);
+        painter->setClipPath(roundedHandle, Qt::IntersectClip);
+        painter->fillRect(handle, handleColor);
+        painter->restore();
+
+        part.subControls = slider->subControls & ~(SC_ScrollBarGroove | SC_ScrollBarSlider);
+        QProxyStyle::drawComplexControl(control, &part, painter, widget);
     }
 
     int styleHint(StyleHint hint, const QStyleOption *option = nullptr,
