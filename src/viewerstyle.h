@@ -31,11 +31,10 @@ public:
             else if (slider->state.testFlag(State_MouseOver)) handleColor = handleColor.lighter(108);
         }
 
-        const QRect sliderRect = subControlRect(control, slider, SC_ScrollBarSlider, widget);
-        const qreal handleWidth = sliderRect.width() * 0.81;
-        const qreal left = sliderRect.x() + (sliderRect.width() - handleWidth) / 2 + 1;
-        // Match Fusion's painted length, including one pixel past each end.
-        const QRectF handle(left, sliderRect.y() - 1, handleWidth, sliderRect.height() + 2);
+        QRectF handle = subControlRect(control, slider, SC_ScrollBarSlider, widget);
+        const qreal sideInset = handle.width() * 0.095;
+        // Offset the handle slightly right and match Fusion's one-pixel extension at each end.
+        handle.adjust(sideInset + 0.5, -1, 1 - sideInset, 1);
         QPainterPath roundedHandle;
         roundedHandle.addRoundedRect(handle.adjusted(-1, -1, 1, 1), 7, 7);
         painter->save();
